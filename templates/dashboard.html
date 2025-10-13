@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heart Rate Monitor Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>
+                    <span class="icon">💓</span>
+                    Heart Rate Monitor
+                </h1>
+                <div class="status" id="status">
+                    <span class="dot" id="connectionDot"></span>
+                    <span id="statusText">Connessione in corso...</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-grid">
+            <!-- Card BPM Corrente -->
+            <div class="card card-highlight">
+                <div class="card-header">
+                    <h2>BPM in Tempo Reale</h2>
+                </div>
+                <div class="bpm-display">
+                    <div class="heart-animation" id="heartIcon">❤️</div>
+                    <div class="bpm-value" id="currentBpm">--</div>
+                    <div class="bpm-label">BPM</div>
+                </div>
+                <div class="timestamp" id="lastUpdate">In attesa di dati...</div>
+            </div>
+
+            <!-- Statistiche -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>📊 Statistiche Sessione</h2>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item stat-avg">
+                        <div class="stat-icon">📈</div>
+                        <div class="stat-content">
+                            <div class="stat-label">Media</div>
+                            <div class="stat-value" id="avgBpm">--</div>
+                            <div class="stat-unit">bpm</div>
+                        </div>
+                    </div>
+                    <div class="stat-item stat-min">
+                        <div class="stat-icon">📉</div>
+                        <div class="stat-content">
+                            <div class="stat-label">Minimo</div>
+                            <div class="stat-value" id="minBpm">--</div>
+                            <div class="stat-unit">bpm</div>
+                        </div>
+                    </div>
+                    <div class="stat-item stat-max">
+                        <div class="stat-icon">🔥</div>
+                        <div class="stat-content">
+                            <div class="stat-label">Massimo</div>
+                            <div class="stat-value" id="maxBpm">--</div>
+                            <div class="stat-unit">bpm</div>
+                        </div>
+                    </div>
+                    <div class="stat-item stat-samples">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-content">
+                            <div class="stat-label">Campioni</div>
+                            <div class="stat-value" id="totalSamples">--</div>
+                            <div class="stat-unit">totali</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grafico in tempo reale -->
+            <div class="card card-wide">
+                <div class="card-header">
+                    <h2>📈 Andamento Ultimi 5 Minuti</h2>
+                    <div class="chart-controls">
+                        <button class="btn-icon" onclick="resetChart()" title="Reset grafico">
+                            🔄
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="heartRateChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>💻 Heart Rate Monitor Dashboard | Dati salvati in tempo reale</p>
+        </footer>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>
