@@ -3,17 +3,15 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'device_detail_screen.dart';
 
-// Enum per tipi COOSPO
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
 
-// Funzioni helper
 CoospoDeviceType getCoospoDeviceType(String deviceName) {
   deviceName = deviceName.toLowerCase();
-  if (!deviceName.contains('coospo')) {
-    return CoospoDeviceType.none;
-  } else if (deviceName.contains('heart rate band')) {
+  if (!deviceName.contains('coospo')) return CoospoDeviceType.none;
+  if (deviceName.contains('heart rate') || deviceName.contains('h6') || deviceName.contains('h7')) {
     return CoospoDeviceType.heartRateBand;
-  } else if (deviceName.contains('armband')) {
+  }
+  if (deviceName.contains('armband') || deviceName.contains('pod')) {
     return CoospoDeviceType.armband;
   }
   return CoospoDeviceType.unknown;
@@ -22,14 +20,13 @@ CoospoDeviceType getCoospoDeviceType(String deviceName) {
 Color getCoospoColor(CoospoDeviceType type) {
   switch (type) {
     case CoospoDeviceType.heartRateBand:
-      return Colors.red;
+      return const Color(0xFFFF4444);  // Rosso
     case CoospoDeviceType.armband:
-      return Colors.orange;
+      return const Color(0xFFFF8C00);  // Arancione
     case CoospoDeviceType.unknown:
-      return Colors.purple;
-    case CoospoDeviceType.none:
+      return const Color(0xFF9B59B6);  // Viola
     default:
-      return const Color(0xFF667eea);
+      return const Color(0xFF3498DB);  // Blu
   }
 }
 
@@ -68,10 +65,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       FlutterBluePlus.scanResults.listen((results) {
         setState(() {
           _scanResults = results..sort((a, b) {
-            bool aIsCoospo = a.device.platformName.toUpperCase().contains('COOSPO');
-            bool bIsCoospo = b.device.platformName.toUpperCase().contains('COOSPO');
-            if (aIsCoospo && !bIsCoospo) return -1;
-            if (!aIsCoospo && bIsCoospo) return 1;
+            var aType = getCoospoDeviceType(a.device.platformName);
+            var bType = getCoospoDeviceType(b.device.platformName);
+            if (aType != CoospoDeviceType.none && bType == CoospoDeviceType.none) return -1;
+            if (aType == CoospoDeviceType.none && bType != CoospoDeviceType.none) return 1;
             return 0;
           });
         });
@@ -104,143 +101,178 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF0A0E21),
       appBar: AppBar(
-        title: const Text('Dispositivi BLE'),
-        backgroundColor: const Color(0xFF667eea),
+        backgroundColor: const Color(0xFF0A0E21),
         elevation: 0,
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              const Color(0xFF667eea).withOpacity(0.1),
-              Colors.white,
-            ],
+        title: const Text(
+          'Dispositivi BLE',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
           ),
         ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton.icon(
-                onPressed: _isScanning ? null : _startScan,
-                icon: Icon(_isScanning ? Icons.hourglass_empty : Icons.search),
-                label: Text(_isScanning ? 'Scansione in corso...' : 'Cerca Dispositivi'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF667eea),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  elevation: 5,
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 20),
+          // Pulsante Scansione
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: ElevatedButton(
+              onPressed: _isScanning ? null : _startScan,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isScanning ? Colors.grey.shade700 : const Color(0xFF1E90FF),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
+                elevation: 8,
+                shadowColor: _isScanning ? Colors.transparent : const Color(0xFF1E90FF).withOpacity(0.5),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    _isScanning ? Icons.hourglass_empty : Icons.radar,
+                    size: 26,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    _isScanning ? 'SCANSIONE IN CORSO...' : 'CERCA DISPOSITIVI',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ],
               ),
             ),
-            if (_isScanning)
-              const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: CircularProgressIndicator(),
-              ),
-            Expanded(
-              child: _scanResults.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.bluetooth_searching,
-                            size: 80,
-                            color: Colors.grey.shade400,
+          ),
+          
+          if (_isScanning) ...[
+            const SizedBox(height: 30),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1E90FF)),
+              strokeWidth: 4,
+            ),
+          ],
+          
+          const SizedBox(height: 20),
+          
+          // Lista dispositivi
+          Expanded(
+            child: _scanResults.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.bluetooth_searching,
+                          size: 100,
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Nessun dispositivo trovato',
+                          style: TextStyle(
+                            fontSize: 20,
+                            color: Colors.white.withOpacity(0.6),
+                            fontWeight: FontWeight.w500,
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Nessun dispositivo trovato',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey.shade600,
-                            ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Premi il pulsante per iniziare',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white.withOpacity(0.4),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Premi il pulsante per iniziare la ricerca',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade500,
-                            ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    itemCount: _scanResults.length,
+                    itemBuilder: (context, index) {
+                      final result = _scanResults[index];
+                      final device = result.device;
+                      final deviceType = getCoospoDeviceType(device.platformName);
+                      final color = getCoospoColor(deviceType);
+                      final isCoospo = deviceType != CoospoDeviceType.none;
+                      
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isCoospo
+                                ? [color.withOpacity(0.3), color.withOpacity(0.1)]
+                                : [const Color(0xFF1D1E33), const Color(0xFF1D1E33)],
                           ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _scanResults.length,
-                      itemBuilder: (context, index) {
-                        final result = _scanResults[index];
-                        final device = result.device;
-                        final deviceType = getCoospoDeviceType(device.platformName);
-                        final color = getCoospoColor(deviceType);
-                        
-                        return Card(
-                          elevation: deviceType != CoospoDeviceType.none ? 8 : 4,
-                          margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: deviceType != CoospoDeviceType.none
-                                ? BorderSide(color: color, width: 2)
-                                : BorderSide.none,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isCoospo ? color : Colors.white.withOpacity(0.1),
+                            width: isCoospo ? 2 : 1,
                           ),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
                           child: InkWell(
                             onTap: () => _connectToDevice(device),
                             borderRadius: BorderRadius.circular(16),
-                            child: Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                gradient: deviceType != CoospoDeviceType.none
-                                    ? LinearGradient(
-                                        colors: [
-                                          color.withOpacity(0.2),
-                                          color.withOpacity(0.05),
-                                        ],
-                                      )
-                                    : null,
-                              ),
+                            splashColor: color.withOpacity(0.2),
+                            child: Padding(
+                              padding: const EdgeInsets.all(18),
                               child: Row(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.all(12),
+                                    padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
                                       color: color,
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: color.withOpacity(0.4),
+                                          blurRadius: 8,
+                                          spreadRadius: 2,
+                                        ),
+                                      ],
                                     ),
                                     child: Icon(
-                                      deviceType == CoospoDeviceType.none ? Icons.bluetooth : Icons.favorite,
+                                      isCoospo ? Icons.favorite : Icons.bluetooth,
                                       color: Colors.white,
-                                      size: 28,
+                                      size: 32,
                                     ),
                                   ),
-                                  const SizedBox(width: 16),
+                                  const SizedBox(width: 18),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          device.platformName.isEmpty ? 'Dispositivo sconosciuto' : device.platformName,
+                                          device.platformName.isEmpty
+                                              ? 'Dispositivo sconosciuto'
+                                              : device.platformName,
                                           style: TextStyle(
-                                            fontSize: 16,
+                                            fontSize: 18,
                                             fontWeight: FontWeight.bold,
-                                            color: color,
+                                            color: isCoospo ? color : Colors.white,
+                                            letterSpacing: 0.5,
                                           ),
                                         ),
-                                        const SizedBox(height: 4),
+                                        const SizedBox(height: 6),
                                         Text(
                                           device.remoteId.toString(),
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: Colors.white.withOpacity(0.5),
+                                            fontFamily: 'monospace',
                                           ),
                                         ),
                                       ],
@@ -248,19 +280,19 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                                   ),
                                   Icon(
                                     Icons.arrow_forward_ios,
-                                    color: color,
-                                    size: 20,
+                                    color: isCoospo ? color : Colors.white.withOpacity(0.3),
+                                    size: 22,
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
