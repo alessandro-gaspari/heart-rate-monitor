@@ -56,7 +56,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   late CoospoDeviceType deviceType;
   late Color deviceColor;
   
-  final String serverUrl = 'wss://heart-rate-monitor-hu47.onrender.com:10000';
+  final String serverUrl = 'wss://heart-rate-monitor-hu47.onrender.com';
 
   @override
   void initState() {
@@ -75,6 +75,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
 
   @override
   void dispose() {
+    _rssiTimer?.cancel();  // CANCELLA TIMER
     _heartbeatController.dispose();
     _stopBleReading();
     _stopStreaming();
@@ -107,22 +108,31 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     });
   }
 
+  Timer? _rssiTimer;  // Aggiungi questa variabile in cima
+
   void _startRssiMonitoring() {
-    // Monitora segnale RSSI ogni 2 secondi
-    Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (!isConnected) {
+    _rssiTimer?.cancel();  // Cancella timer precedente
+    
+    _rssiTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      if (!mounted || !isConnected) {  // CONTROLLA mounted!
         timer.cancel();
         return;
       }
+      
       widget.device.readRssi().then((rssi) {
-        setState(() {
-          signalStrength = rssi;
-        });
+        if (mounted) {  // CONTROLLA mounted prima di setState!
+          setState(() {
+            signalStrength = rssi;
+          });
+        }
       }).catchError((e) {
-        print('Errore lettura RSSI: $e');
+        print('Errore RSSI: $e');
       });
     });
   }
+
+
+
 
   Color _getSignalColor() {
     if (signalStrength > -60) return Colors.green;
@@ -204,7 +214,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     print('✅ Disconnessione completata');
   }
 
-
+  
   Future<void> _startBleReading() async {
     print('=== INIZIO LETTURA BLE ===');
 
