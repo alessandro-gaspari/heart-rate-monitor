@@ -57,6 +57,15 @@
 	<array>
 		<string>bluetooth-central</string>
 		<string>location</string>
+		<string>audio</string>
 	</array>
+
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>L'app necessita dell'accesso Bluetooth per mantenere la connessione con i dispositivi Coospo anche in background</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Questa app usa il GPS per mostrare la qualità del segnale</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>L'app necessita dell'accesso Bluetooth per comunicare con i sensori cardiaci Coospo</string>
+
 </dict>
 </plist>
