@@ -72,36 +72,95 @@ function initChart() {
     
     chart = new Chart(ctx, {
         type: 'line',
-        data: {
+        data: {   // 🔧 aggiunto "data"
             labels: [],
             datasets: [{
                 label: 'Heart Rate (BPM)',
-                data: [],
-                borderColor: '#667eea',
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                data: [],   // 🔧 aggiunto "data: []"
+                borderColor: '#06b6d4',
+                backgroundColor: 'rgba(6, 182, 212, 0.1)',
                 borderWidth: 3,
                 tension: 0.4,
                 fill: true,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                pointBackgroundColor: '#667eea',
+                pointRadius: 0,
+                pointHoverRadius: 8,
+                pointBackgroundColor: '#06b6d4',
                 pointBorderColor: '#fff',
-                pointBorderWidth: 2
+                pointBorderWidth: 2,
+                pointHoverBackgroundColor: '#06b6d4',
+                pointHoverBorderColor: '#fff',
+                pointHoverBorderWidth: 3
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
             scales: {
+                x: {
+                    display: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: {
+                            family: 'Inter',
+                            size: 11
+                        }
+                    }
+                },
                 y: {
                     beginAtZero: false,
                     suggestedMin: 50,
-                    suggestedMax: 150
+                    suggestedMax: 150,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.05)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: {
+                            family: 'Inter',
+                            size: 12
+                        },
+                        callback: function(value) {
+                            return value + ' bpm';
+                        }
+                    }
                 }
             },
             plugins: {
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                    titleColor: '#06b6d4',
+                    bodyColor: '#fff',
+                    borderColor: '#06b6d4',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false,
+                    titleFont: {
+                        family: 'Inter',
+                        size: 13,
+                        weight: '600'
+                    },
+                    bodyFont: {
+                        family: 'Orbitron',
+                        size: 16,
+                        weight: '700'
+                    },
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y + ' BPM';
+                        }
+                    }
                 }
             }
         }
