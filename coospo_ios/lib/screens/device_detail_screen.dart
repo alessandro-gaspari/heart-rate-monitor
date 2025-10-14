@@ -45,11 +45,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   bool isConnected = false;
   bool isStreaming = false;
   int currentHeartRate = 0;
-  int signalStrength = -50; // Simulazione RSSI per GPS
+  int signalStrength = -50;
   
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
   StreamSubscription<List<int>>? _characteristicSubscription;
-  StreamSubscription<int>? _rssiSubscription;
+  Timer? _rssiTimer;
   IO.Socket? _socket;
   
   late AnimationController _heartbeatController;
@@ -69,18 +69,16 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       vsync: this,
     );
 
-    // NON connetto automaticamente
     _listenToDeviceState();
   }
 
   @override
   void dispose() {
-    _rssiTimer?.cancel();  // CANCELLA TIMER
+    _rssiTimer?.cancel();
     _heartbeatController.dispose();
     _stopBleReading();
     _stopStreaming();
     _deviceStateSubscription?.cancel();
-    _rssiSubscription?.cancel();
     super.dispose();
   }
 
@@ -93,34 +91,36 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   void _listenToDeviceState() {
     _deviceStateSubscription = widget.device.connectionState.listen((state) {
       if (state == BluetoothConnectionState.disconnected) {
-        setState(() {
-          isConnected = false;
-          isStreaming = false;
-          currentHeartRate = 0;
-        });
+        if (mounted) {
+          setState(() {
+            isConnected = false;
+            isStreaming = false;
+            currentHeartRate = 0;
+          });
+        }
         _showMessage('Dispositivo disconnesso', true);
       } else if (state == BluetoothConnectionState.connected) {
-        setState(() {
-          isConnected = true;
-        });
+        if (mounted) {
+          setState(() {
+            isConnected = true;
+          });
+        }
         _startRssiMonitoring();
       }
     });
   }
 
-  Timer? _rssiTimer;  // Aggiungi questa variabile in cima
-
   void _startRssiMonitoring() {
-    _rssiTimer?.cancel();  // Cancella timer precedente
+    _rssiTimer?.cancel();
     
     _rssiTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-      if (!mounted || !isConnected) {  // CONTROLLA mounted!
+      if (!mounted || !isConnected) {
         timer.cancel();
         return;
       }
       
       widget.device.readRssi().then((rssi) {
-        if (mounted) {  // CONTROLLA mounted prima di setState!
+        if (mounted) {
           setState(() {
             signalStrength = rssi;
           });
@@ -130,9 +130,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       });
     });
   }
-
-
-
 
   Color _getSignalColor() {
     if (signalStrength > -60) return Colors.green;
@@ -154,7 +151,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       });
       _showMessage('Connesso', false);
       
-      // Avvia lettura BPM automaticamente
       await _startBleReading();
     } catch (e) {
       _showMessage('Errore connessione: $e', true);
@@ -167,34 +163,25 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   Future<void> _disconnect() async {
     print('🔴 DISCONNESSIONE FORZATA IMMEDIATA');
     
-    // 1. Ferma subito lo streaming
     if (isStreaming) {
       await _stopStreaming();
     }
     
-    // 2. Cancella subito tutte le subscription
     await _characteristicSubscription?.cancel();
     _characteristicSubscription = null;
     
-    await _rssiSubscription?.cancel();
-    _rssiSubscription = null;
+    _rssiTimer?.cancel();
+    _rssiTimer = null;
     
-    // 3. Chiudi WebSocket
-    await _channel?.sink.close();
-    _channel = null;
-    
-    // 4. Cancella listener stato dispositivo
     await _deviceStateSubscription?.cancel();
     _deviceStateSubscription = null;
     
-    // 5. Aggiorna UI IMMEDIATAMENTE
     setState(() {
       isConnected = false;
       isStreaming = false;
       currentHeartRate = 0;
     });
     
-    // 6. DISCONNETTI BLUETOOTH CON TIMEOUT FORZATO
     try {
       print('Disconnessione Bluetooth...');
       await widget.device.disconnect(timeout: 5).timeout(
@@ -208,13 +195,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       print('❌ Errore disconnect (ignorato): $e');
     }
     
-    // 7. Feedback immediato
     _showMessage('Disconnesso', false);
-    
     print('✅ Disconnessione completata');
   }
 
-  
   Future<void> _startBleReading() async {
     print('=== INIZIO LETTURA BLE ===');
 
@@ -258,8 +242,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           _triggerHeartbeat();
           print('❤️  Heart Rate: $hr bpm');
           
-          // Se streaming attivo, invia al server
-          if (isStreaming && _channel != null) {
+          if (isStreaming && _socket != null && _socket!.connected) {
             _sendToServer(data);
           }
         }
@@ -289,20 +272,27 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     setState(() => isStreaming = true);
 
     try {
-      print('🔌 Connessione WebSocket: $serverUrl');
-      _channel = WebSocketChannel.connect(Uri.parse(serverUrl));
+      print('🔌 Connessione Socket.IO: $serverUrl');
       
-      _channel?.stream.listen(
-        (message) {
-          print('📨 Risposta server: $message');
-        },
-        onError: (error) {
-          print('❌ Errore WebSocket: $error');
-        },
-      );
-
-      print('✅ Streaming al server attivo');
-      _showMessage('Streaming avviato', false);
+      _socket = IO.io(serverUrl, <String, dynamic>{
+        'transports': ['websocket'],
+        'autoConnect': false,
+      });
+      
+      _socket?.connect();
+      
+      _socket?.onConnect((_) {
+        print('✅ Socket.IO connesso');
+        _showMessage('Streaming avviato', false);
+      });
+      
+      _socket?.onDisconnect((_) {
+        print('⚠️ Socket.IO disconnesso');
+      });
+      
+      _socket?.onError((error) {
+        print('❌ Errore Socket.IO: $error');
+      });
       
     } catch (e) {
       print('❌ ERRORE STREAMING: $e');
@@ -312,16 +302,22 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
   void _sendToServer(List<int> data) {
+    if (_socket == null || !_socket!.connected) {
+      print('❌ Socket non connesso');
+      return;
+    }
+    
     final encoded = base64.encode(data);
     final deviceTypeStr = deviceType.toString().split('.').last;
-    final jsonMessage = json.encode({
+    
+    final message = {
       'device_type': deviceTypeStr,
       'device_id': widget.device.platformName,
       'data': encoded
-    });
+    };
     
     try {
-      _channel?.sink.add(jsonMessage);
+      _socket?.emit('heart_rate_data', message);
       print('✅ Dati inviati al server');
     } catch (e) {
       print('❌ Errore invio: $e');
@@ -332,8 +328,9 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     print('=== FINE STREAMING ===');
     setState(() => isStreaming = false);
     
-    await _channel?.sink.close();
-    _channel = null;
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
     
     print('✅ Streaming terminato');
   }
@@ -402,7 +399,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         ),
         centerTitle: true,
         actions: [
-          // Indicatore GPS/Segnale
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Container(
@@ -435,7 +431,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Animazione cuore pulsante
               ScaleTransition(
                 scale: Tween<double>(begin: 1.0, end: 1.3).animate(
                   CurvedAnimation(
@@ -475,7 +470,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
               
               const SizedBox(height: 50),
               
-              // BPM Display (visibile sempre se connesso)
               Text(
                 currentHeartRate > 0 ? '$currentHeartRate' : '--',
                 style: TextStyle(
@@ -504,12 +498,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
               
               const SizedBox(height: 80),
               
-              // Pulsanti
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 40),
                 child: Column(
                   children: [
-                    // Pulsante CONNETTI/DISCONNETTI
                     if (!isConnected)
                       SizedBox(
                         width: double.infinity,
@@ -544,7 +536,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       ),
                     
                     if (isConnected) ...[
-                      // Pulsante START/STOP STREAM
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
@@ -582,7 +573,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       
                       const SizedBox(height: 16),
                       
-                      // Pulsante DISCONNETTI
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton(
