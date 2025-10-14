@@ -2,14 +2,29 @@ var chart;
 var ws;
 var maxDataPoints = 50;
 
+// Mappa colori per device type
+const deviceColors = {
+    'heartRateBand': '#e74c3c',  // Rosso
+    'armband': '#e67e22',        // Arancione
+    'unknown': '#9b59b6',        // Viola
+    'none': '#667eea'            // Blu default
+};
+
+function getDeviceColor(deviceType) {
+    return deviceColors[deviceType] || deviceColors['none'];
+}
+
 function initWebSocket() {
-    var wsUrl = 'ws://172.20.10.3:8765/dashboard';
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var host = window.location.hostname;
+    var wsUrl = protocol + '//' + host + ':8765';
+    
     console.log('Connessione a:', wsUrl);
     
     ws = new WebSocket(wsUrl);
     
     ws.onopen = function() {
-        console.log('Connesso al server');
+        console.log('✅ Connesso al server');
         ws.send('dashboard');
         document.getElementById('statusText').textContent = 'Connesso e in ascolto';
         document.getElementById('connectionDot').classList.add('connected');
@@ -18,31 +33,36 @@ function initWebSocket() {
     ws.onmessage = function(event) {
         try {
             var data = JSON.parse(event.data);
-            console.log('Dati ricevuti:', data);
-            updateCurrentBPM(data.heart_rate, data.timestamp);
-            addDataToChart(data.timestamp, data.heart_rate);
+            console.log('📨 Dati ricevuti:', data);
+            
+            var deviceType = data.device_type || 'unknown';
+            var color = getDeviceColor(deviceType);
+            
+            updateCurrentBPM(data.heart_rate, data.timestamp, deviceType, color);
+            addDataToChart(data.timestamp, data.heart_rate, color);
         } catch (e) {
-            console.error('Errore parsing dati:', e);
+            console.error('❌ Errore parsing:', e);
         }
     };
     
     ws.onerror = function(error) {
-        console.error('Errore WebSocket:', error);
+        console.error('❌ Errore WebSocket:', error);
         document.getElementById('statusText').textContent = 'Errore connessione';
         document.getElementById('connectionDot').classList.remove('connected');
     };
     
     ws.onclose = function() {
-        console.log('Disconnesso dal server');
+        console.log('⚠️ Disconnesso');
         document.getElementById('statusText').textContent = 'Disconnesso - Riconnessione...';
         document.getElementById('connectionDot').classList.remove('connected');
         setTimeout(initWebSocket, 3000);
     };
 }
 
-function updateCurrentBPM(bpm, timestamp) {
+function updateCurrentBPM(bpm, timestamp, deviceType, color) {
     var bpmElement = document.getElementById('currentBpm');
     bpmElement.textContent = bpm;
+    bpmElement.style.color = color;
     
     var heartIcon = document.getElementById('heartIcon');
     heartIcon.style.animation = 'none';
@@ -51,17 +71,14 @@ function updateCurrentBPM(bpm, timestamp) {
     }, 10);
     
     var date = new Date(timestamp);
-    var hours = String(date.getHours()).padStart(2, '0');
-    var minutes = String(date.getMinutes()).padStart(2, '0');
-    var seconds = String(date.getSeconds()).padStart(2, '0');
-    var timeString = hours + ':' + minutes + ':' + seconds;
+    var timeString = date.toLocaleTimeString('it-IT');
     
-    document.getElementById('lastUpdate').textContent = 'Ultimo aggiornamento: ' + timeString;
+    document.getElementById('lastUpdate').textContent = 
+        'Ultimo aggiornamento: ' + timeString + ' | Dispositivo: ' + deviceType;
 }
 
 function initChart() {
     var ctx = document.getElementById('heartRateChart');
-    
     chart = new Chart(ctx, {
         type: 'line',
         data: {
@@ -84,77 +101,32 @@ function initChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: {
-                duration: 750,
-                easing: 'easeInOutQuart'
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
-            },
             scales: {
                 y: {
                     beginAtZero: false,
                     suggestedMin: 50,
-                    suggestedMax: 150,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.05)'
-                    },
-                    ticks: {
-                        font: {
-                            size: 12,
-                            weight: '600'
-                        }
-                    }
-                },
-                x: {
-                    grid: {
-                        display: false
-                    },
-                    ticks: {
-                        maxRotation: 0,
-                        autoSkip: true,
-                        maxTicksLimit: 10,
-                        font: {
-                            size: 11
-                        }
-                    }
+                    suggestedMax: 150
                 }
             },
             plugins: {
                 legend: {
                     display: false
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    padding: 12,
-                    titleFont: {
-                        size: 14
-                    },
-                    bodyFont: {
-                        size: 16,
-                        weight: 'bold'
-                    },
-                    callbacks: {
-                        label: function(context) {
-                            return context.parsed.y + ' BPM';
-                        }
-                    }
                 }
             }
         }
     });
 }
 
-function addDataToChart(timestamp, value) {
+function addDataToChart(timestamp, value, color) {
     var date = new Date(timestamp);
-    var hours = String(date.getHours()).padStart(2, '0');
-    var minutes = String(date.getMinutes()).padStart(2, '0');
-    var seconds = String(date.getSeconds()).padStart(2, '0');
-    var timeLabel = hours + ':' + minutes + ':' + seconds;
+    var timeLabel = date.toLocaleTimeString('it-IT');
     
     chart.data.labels.push(timeLabel);
     chart.data.datasets[0].data.push(value);
+    
+    // Aggiorna colore linea con l'ultimo device type
+    chart.data.datasets[0].borderColor = color;
+    chart.data.datasets[0].pointBackgroundColor = color;
     
     if (chart.data.labels.length > maxDataPoints) {
         chart.data.labels.shift();
@@ -164,51 +136,34 @@ function addDataToChart(timestamp, value) {
     chart.update('none');
 }
 
-function resetChart() {
-    chart.data.labels = [];
-    chart.data.datasets[0].data = [];
-    chart.update();
-    console.log('Grafico resettato');
-}
-
 function loadStatistics() {
     fetch('/api/statistics')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(stats) {
+        .then(response => response.json())
+        .then(stats => {
             document.getElementById('avgBpm').textContent = stats.avg_hr || '--';
             document.getElementById('minBpm').textContent = stats.min_hr || '--';
             document.getElementById('maxBpm').textContent = stats.max_hr || '--';
             document.getElementById('totalSamples').textContent = stats.total_samples || '--';
         })
-        .catch(function(error) {
-            console.error('Errore caricamento statistiche:', error);
-        });
+        .catch(error => console.error('❌ Errore statistiche:', error));
 }
 
 function loadHistory() {
     fetch('/api/history/5')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            data.forEach(function(item) {
-                addDataToChart(item.timestamp, item.heart_rate);
+        .then(response => response.json())
+        .then(data => {
+            data.reverse().forEach(item => {
+                var color = getDeviceColor(item.device_type || 'unknown');
+                addDataToChart(item.timestamp, item.heart_rate, color);
             });
-            console.log('Storico caricato:', data.length, 'campioni');
         })
-        .catch(function(error) {
-            console.error('Errore caricamento storico:', error);
-        });
+        .catch(error => console.error('❌ Errore storico:', error));
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Dashboard inizializzata');
     initChart();
     initWebSocket();
     loadHistory();
     loadStatistics();
-    
-    setInterval(loadStatistics, 5001);
+    setInterval(loadStatistics, 5000);
 });

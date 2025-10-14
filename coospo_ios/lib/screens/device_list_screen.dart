@@ -1,393 +1,273 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../services/gps_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'device_detail_screen.dart';
+
+// Enum per tipi COOSPO
+enum CoospoDeviceType { none, heartRateBand, armband, unknown }
+
+// Funzioni helper
+CoospoDeviceType getCoospoDeviceType(String deviceName) {
+  deviceName = deviceName.toLowerCase();
+  if (!deviceName.contains('coospo')) {
+    return CoospoDeviceType.none;
+  } else if (deviceName.contains('heart rate band')) {
+    return CoospoDeviceType.heartRateBand;
+  } else if (deviceName.contains('armband')) {
+    return CoospoDeviceType.armband;
+  }
+  return CoospoDeviceType.unknown;
+}
+
+Color getCoospoColor(CoospoDeviceType type) {
+  switch (type) {
+    case CoospoDeviceType.heartRateBand:
+      return Colors.red;
+    case CoospoDeviceType.armband:
+      return Colors.orange;
+    case CoospoDeviceType.unknown:
+      return Colors.purple;
+    case CoospoDeviceType.none:
+    default:
+      return const Color(0xFF667eea);
+  }
+}
 
 class DeviceListScreen extends StatefulWidget {
   const DeviceListScreen({Key? key}) : super(key: key);
 
   @override
-  State<DeviceListScreen> createState() => _DeviceListScreenState();
+  _DeviceListScreenState createState() => _DeviceListScreenState();
 }
 
 class _DeviceListScreenState extends State<DeviceListScreen> {
-  List<ScanResult> scanResults = [];
-  bool isScanning = false;
-
-  final GpsService _gpsService = GpsService();
-  GpsSignalQuality _currentGpsSignal = GpsSignalQuality.noSignal;
+  List<ScanResult> _scanResults = [];
+  bool _isScanning = false;
 
   @override
   void initState() {
     super.initState();
-    _checkBluetoothState();
-    _initGps();
+    _requestPermissions();
   }
 
-  void _initGps() {
-    _gpsService.startMonitoring();
-    _gpsService.signalStream.listen((quality) {
-      if (mounted) {
-        setState(() {
-          _currentGpsSignal = quality;
-        });
-      }
-    });
-  }
-
-  Future<void> _checkBluetoothState() async {
-    if (await FlutterBluePlus.isSupported == false) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Bluetooth non supportato su questo dispositivo')),
-        );
-      }
-      return;
-    }
+  Future<void> _requestPermissions() async {
+    await Permission.bluetoothScan.request();
+    await Permission.bluetoothConnect.request();
+    await Permission.location.request();
   }
 
   Future<void> _startScan() async {
-    await FlutterBluePlus.stopScan();
-
     setState(() {
-      scanResults.clear();
-      isScanning = true;
+      _scanResults.clear();
+      _isScanning = true;
     });
 
-    await Future.delayed(const Duration(milliseconds: 300));
     try {
-      await FlutterBluePlus.startScan(
-        timeout: const Duration(seconds: 15),
-        androidUsesFineLocation: false,
-      );
-
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+      
       FlutterBluePlus.scanResults.listen((results) {
-        if (mounted) {
-          setState(() {
-            scanResults = results;
+        setState(() {
+          _scanResults = results..sort((a, b) {
+            bool aIsCoospo = a.device.platformName.toUpperCase().contains('COOSPO');
+            bool bIsCoospo = b.device.platformName.toUpperCase().contains('COOSPO');
+            if (aIsCoospo && !bIsCoospo) return -1;
+            if (!aIsCoospo && bIsCoospo) return 1;
+            return 0;
           });
-        }
+        });
       });
 
-      await Future.delayed(const Duration(seconds: 15));
-      await FlutterBluePlus.stopScan();
+      await Future.delayed(const Duration(seconds: 10));
+      await _stopScan();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Errore scansione: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          isScanning = false;
-        });
-      }
+      print('Errore scansione: $e');
+      await _stopScan();
     }
   }
 
-  bool _isCoospoDevice(ScanResult result) {
-    final advName = result.advertisementData.advName.toUpperCase();
-    if (advName.contains('COOSPO') ||
-        advName.contains('H6') ||
-        advName.contains('H808') ||
-        advName.contains('HW807') ||
-        advName.contains('HW706') ||
-        advName.contains('HW9')) {
-      return true;
-    }
-
-    final platformName = result.device.platformName.toUpperCase();
-    if (platformName.contains('COOSPO') ||
-        platformName.contains('H6') ||
-        platformName.contains('H808') ||
-        platformName.contains('HW807') ||
-        platformName.contains('HW706') ||
-        platformName.contains('HW9')) {
-      return true;
-    }
-
-    final services = result.advertisementData.serviceUuids;
-    bool hasHeartRateService = services.any(
-        (uuid) => uuid.toString().toLowerCase().contains('180d'));
-
-    final manufacturerData = result.advertisementData.manufacturerData;
-
-    if (hasHeartRateService && manufacturerData.isNotEmpty) {
-      return true;
-    }
-
-    return false;
-  }
-
-  String _getDeviceName(ScanResult result) {
-    if (_isCoospoDevice(result)) {
-      return '❤️ Cardiofrequenzimetro COOSPO';
-    }
-
-    if (result.advertisementData.advName.isNotEmpty) {
-      String name = result.advertisementData.advName;
-      if (name.toUpperCase().contains('COOSPO') ||
-          name.toUpperCase().contains('H6') ||
-          name.toUpperCase().contains('H808') ||
-          name.toUpperCase().contains('HW')) {
-        return '❤️ Cardiofrequenzimetro COOSPO';
-      }
-      return name;
-    }
-
-    if (result.device.platformName.isNotEmpty) {
-      String name = result.device.platformName;
-      if (name.toUpperCase().contains('COOSPO') ||
-          name.toUpperCase().contains('H6') ||
-          name.toUpperCase().contains('H808') ||
-          name.toUpperCase().contains('HW')) {
-        return '❤️ Cardiofrequenzimetro COOSPO';
-      }
-      return name;
-    }
-
-    return 'Dispositivo ${result.device.remoteId.str.substring(result.device.remoteId.str.length - 8)}';
-  }
-
-  String _getDeviceType(ScanResult result) {
-    if (_isCoospoDevice(result)) {
-      return 'Sensore cardio Bluetooth/ANT+';
-    }
-
-    final services = result.advertisementData.serviceUuids;
-
-    if (services.any((uuid) => uuid.toString().toLowerCase().contains('180f'))) {
-      return '🔋 Sensore batteria';
-    }
-    if (services.any((uuid) => uuid.toString().toLowerCase().contains('180d'))) {
-      return '❤️ Cardiofrequenzimetro';
-    }
-    if (services.any((uuid) => uuid.toString().toLowerCase().contains('1816'))) {
-      return '🚴 Sensore velocità/cadenza';
-    }
-    if (services.any((uuid) => uuid.toString().toLowerCase().contains('1818'))) {
-      return '🚴 Power meter';
-    }
-
-    return '📱 Dispositivo BLE';
-  }
-
-  void _navigateToDeviceDetail(BluetoothDevice device, bool isCoospo) async {
+  Future<void> _stopScan() async {
     await FlutterBluePlus.stopScan();
-
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DeviceDetailScreen(
-            device: device,
-            isCoospo: isCoospo,
-          ),
-        ),
-      );
-    }
+    setState(() {
+      _isScanning = false;
+    });
   }
 
-  Color _getGpsColor() {
-    switch (_currentGpsSignal) {
-      case GpsSignalQuality.excellent:
-        return Colors.green;
-      case GpsSignalQuality.good:
-        return Colors.lightGreen;
-      case GpsSignalQuality.moderate:
-        return Colors.yellow;
-      case GpsSignalQuality.weak:
-        return Colors.orange;
-      case GpsSignalQuality.veryWeak:
-        return Colors.deepOrange;
-      case GpsSignalQuality.noSignal:
-        return Colors.red;
-    }
-  }
-
-  String _getGpsText() {
-    switch (_currentGpsSignal) {
-      case GpsSignalQuality.excellent:
-        return 'Eccellente';
-      case GpsSignalQuality.good:
-        return 'Buono';
-      case GpsSignalQuality.moderate:
-        return 'Moderato';
-      case GpsSignalQuality.weak:
-        return 'Debole';
-      case GpsSignalQuality.veryWeak:
-        return 'Molto debole';
-      case GpsSignalQuality.noSignal:
-        return 'Nessun segnale';
-    }
-  }
-
-  IconData _getGpsIcon() {
-    switch (_currentGpsSignal) {
-      case GpsSignalQuality.excellent:
-      case GpsSignalQuality.good:
-        return Icons.gps_fixed;
-      case GpsSignalQuality.moderate:
-        return Icons.gps_not_fixed;
-      case GpsSignalQuality.weak:
-      case GpsSignalQuality.veryWeak:
-      case GpsSignalQuality.noSignal:
-        return Icons.gps_off;
-    }
+  void _connectToDevice(BluetoothDevice device) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DeviceDetailScreen(device: device),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dispositivi Bluetooth'),
-        centerTitle: true,
+        title: const Text('Dispositivi BLE'),
+        backgroundColor: const Color(0xFF667eea),
+        elevation: 0,
       ),
-      body: Column(
-        children: [
-          // Indicatore GPS
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            decoration: BoxDecoration(
-              color: _getGpsColor().withOpacity(0.15),
-              border: Border(
-                bottom:
-                    BorderSide(color: _getGpsColor().withOpacity(0.3), width: 2),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              const Color(0xFF667eea).withOpacity(0.1),
+              Colors.white,
+            ],
+          ),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ElevatedButton.icon(
+                onPressed: _isScanning ? null : _startScan,
+                icon: Icon(_isScanning ? Icons.hourglass_empty : Icons.search),
+                label: Text(_isScanning ? 'Scansione in corso...' : 'Cerca Dispositivi'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF667eea),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  elevation: 5,
+                ),
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(_getGpsIcon(), color: _getGpsColor(), size: 24),
-                const SizedBox(width: 12),
-                Text(
-                  'Segnale GPS: ${_getGpsText()}',
-                  style: GoogleFonts.montserrat(
-                    fontSize: 16,
-                    color: _getGpsColor(),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: isScanning ? null : _startScan,
-                  icon: isScanning
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+            if (_isScanning)
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: CircularProgressIndicator(),
+              ),
+            Expanded(
+              child: _scanResults.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.bluetooth_searching,
+                            size: 80,
+                            color: Colors.grey.shade400,
                           ),
-                        )
-                      : const Icon(Icons.bluetooth_searching),
-                  label: Text(
-                    isScanning ? 'Scansione in corso...' : 'Scansiona dispositivi',
-                    style: GoogleFonts.montserrat(fontSize: 16),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    minimumSize: const Size(double.infinity, 50),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (scanResults.isNotEmpty)
-                  Text(
-                    '${scanResults.length} dispositivi trovati',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-              ],
-            ),
-          ),
-
-          Expanded(
-            child: scanResults.isEmpty
-                ? Center(
-                    child: Text(
-                      isScanning
-                          ? 'Ricerca dispositivi Coospo...'
-                          : 'Nessun dispositivo trovato.\nPremi il pulsante per scansionare.',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.montserrat(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: scanResults.length,
-                    itemBuilder: (context, index) {
-                      final result = scanResults[index];
-                      final deviceName = _getDeviceName(result);
-                      final deviceType = _getDeviceType(result);
-                      final isCoospo = _isCoospoDevice(result);
-
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        color: isCoospo ? const Color(0xFF2C3E50) : null,
-                        child: ListTile(
-                          leading: Icon(
-                            isCoospo ? Icons.favorite : Icons.bluetooth,
-                            color: isCoospo ? Colors.red : Colors.blue,
-                            size: 32,
-                          ),
-                          title: Text(
-                            deviceName,
-                            style: GoogleFonts.montserrat(
-                              fontWeight:
-                                  isCoospo ? FontWeight.bold : FontWeight.w600,
-                              fontSize: 16,
-                              color: isCoospo ? Colors.white : null,
+                          const SizedBox(height: 16),
+                          Text(
+                            'Nessun dispositivo trovato',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey.shade600,
                             ),
                           ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                deviceType,
-                                style: GoogleFonts.montserrat(
-                                    fontSize: 12,
-                                    color: isCoospo ? Colors.white70 : null),
-                              ),
-                              Text(
-                                'Segnale: ${result.rssi} dBm',
-                                style: GoogleFonts.montserrat(
-                                    fontSize: 11,
-                                    color: isCoospo ? Colors.white70 : null),
-                              ),
-                            ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Premi il pulsante per iniziare la ricerca',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade500,
+                            ),
                           ),
-                          trailing: Icon(
-                            Icons.arrow_forward_ios,
-                            color: isCoospo ? Colors.white : Colors.grey,
-                            size: 20,
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _scanResults.length,
+                      itemBuilder: (context, index) {
+                        final result = _scanResults[index];
+                        final device = result.device;
+                        final deviceType = getCoospoDeviceType(device.platformName);
+                        final color = getCoospoColor(deviceType);
+                        
+                        return Card(
+                          elevation: deviceType != CoospoDeviceType.none ? 8 : 4,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: deviceType != CoospoDeviceType.none
+                                ? BorderSide(color: color, width: 2)
+                                : BorderSide.none,
                           ),
-                          onTap: () =>
-                              _navigateToDeviceDetail(result.device, isCoospo),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+                          child: InkWell(
+                            onTap: () => _connectToDevice(device),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                gradient: deviceType != CoospoDeviceType.none
+                                    ? LinearGradient(
+                                        colors: [
+                                          color.withOpacity(0.2),
+                                          color.withOpacity(0.05),
+                                        ],
+                                      )
+                                    : null,
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      deviceType == CoospoDeviceType.none ? Icons.bluetooth : Icons.favorite,
+                                      color: Colors.white,
+                                      size: 28,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          device.platformName.isEmpty ? 'Dispositivo sconosciuto' : device.platformName,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: color,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          device.remoteId.toString(),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.arrow_forward_ios,
+                                    color: color,
+                                    size: 20,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _stopScan();
+    super.dispose();
   }
 }
