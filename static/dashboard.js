@@ -2,12 +2,12 @@ var chart;
 var ws;
 var maxDataPoints = 50;
 
-// Mappa colori per device type
+// Colori per device type
 const deviceColors = {
-    'heartRateBand': '#e74c3c',  // Rosso
-    'armband': '#e67e22',        // Arancione
-    'unknown': '#9b59b6',        // Viola
-    'none': '#667eea'            // Blu default
+    'heartRateBand': '#FF4444',  // Rosso
+    'armband': '#FF8C00',        // Arancione
+    'unknown': '#9B59B6',        // Viola
+    'none': '#3498DB'            // Blu default
 };
 
 function getDeviceColor(deviceType) {
@@ -15,16 +15,18 @@ function getDeviceColor(deviceType) {
 }
 
 function initWebSocket() {
+    // URL WebSocket (usa la stessa porta del server)
     var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     var host = window.location.hostname;
-    var wsUrl = protocol + '//' + host + ':8765';
+    var port = window.location.port || '10000';
+    var wsUrl = protocol + '//' + host + ':' + port;
     
-    console.log('Connessione a:', wsUrl);
+    console.log('🔌 Connessione a:', wsUrl);
     
     ws = new WebSocket(wsUrl);
     
     ws.onopen = function() {
-        console.log('✅ Connesso al server');
+        console.log('✅ Connesso al server WebSocket');
         ws.send('dashboard');
         document.getElementById('statusText').textContent = 'Connesso e in ascolto';
         document.getElementById('connectionDot').classList.add('connected');
@@ -41,7 +43,7 @@ function initWebSocket() {
             updateCurrentBPM(data.heart_rate, data.timestamp, deviceType, color);
             addDataToChart(data.timestamp, data.heart_rate, color);
         } catch (e) {
-            console.error('❌ Errore parsing:', e);
+            console.error('❌ Errore parsing:', e, event.data);
         }
     };
     
@@ -161,6 +163,7 @@ function loadHistory() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('📊 Inizializzazione dashboard...');
     initChart();
     initWebSocket();
     loadHistory();
