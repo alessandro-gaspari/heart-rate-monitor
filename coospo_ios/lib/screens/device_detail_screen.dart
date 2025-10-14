@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
 
@@ -50,13 +50,13 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
   StreamSubscription<List<int>>? _characteristicSubscription;
   StreamSubscription<int>? _rssiSubscription;
-  WebSocketChannel? _channel;
+  IO.Socket? _socket;
   
   late AnimationController _heartbeatController;
   late CoospoDeviceType deviceType;
   late Color deviceColor;
   
-  final String serverUrl = 'wss://heart-rate-monitor-hu47.onrender.com';
+  final String serverUrl = 'https://heart-rate-monitor-hu47.onrender.com';
 
   @override
   void initState() {
