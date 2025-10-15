@@ -24,19 +24,18 @@ def migrate_db():
     try:
         conn = sqlite3.connect('heart_rate.db')
         cursor = conn.cursor()
-        
-        # Controlla se le colonne esistono
+
         cursor.execute("PRAGMA table_info(heart_rate_data)")
         columns = [col[1] for col in cursor.fetchall()]
-        
+
         if 'latitude' not in columns:
             cursor.execute('ALTER TABLE heart_rate_data ADD COLUMN latitude REAL')
             print('✅ Colonna latitude aggiunta')
-        
+
         if 'longitude' not in columns:
             cursor.execute('ALTER TABLE heart_rate_data ADD COLUMN longitude REAL')
             print('✅ Colonna longitude aggiunta')
-        
+
         conn.commit()
         conn.close()
     except Exception as e:
@@ -46,7 +45,7 @@ def migrate_db():
 def init_db():
     conn = sqlite3.connect('heart_rate.db')
     cursor = conn.cursor()
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS heart_rate_data (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,34 +56,44 @@ def init_db():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     conn.commit()
     conn.close()
     print('✅ Database inizializzato')
 
-# Decodifica Heart Rate dal dato BLE
+# Decodifica Heart Rate - VERSIONE CORRETTA
 def decode_heart_rate(data):
     try:
-        # Decodifica base64
-        raw_data = base64.b64decode(data.get('data', ''))
-        
-        if not raw_:
+        encoded_data = data.get('data', '')
+
+        if not encoded_data:
+            print("❌ Nessun campo 'data' nel messaggio")
             return 0
-        
+
+        # Decodifica da base64
+        raw_data = base64.b64decode(encoded_data)
+
+        if len(raw_data) == 0:
+            print("❌ Dati vuoti dopo decodifica")
+            return 0
+
         # Heart Rate Measurement Characteristic (0x2A37)
         flags = raw_data[0]
         is_16bit = (flags & 0x01) != 0
-        
+
         if is_16bit and len(raw_data) >= 3:
             heart_rate = (raw_data[2] << 8) | raw_data[1]
         elif len(raw_data) >= 2:
             heart_rate = raw_data[1]
         else:
             heart_rate = 0
-        
+
+        print(f"✅ Heart rate decodificato: {heart_rate} bpm")
         return heart_rate
+
     except Exception as e:
-        print(f"❌ Errore decodifica: {e}")
+        print(f"❌ Errore decodifica heart rate: {e}")
+        print(f"   Dati ricevuti: {data}")
         return 0
 
 # Route principale
@@ -98,8 +107,7 @@ def get_stats():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Calcola statistiche dell'ultima ora
+
         cursor.execute('''
             SELECT 
                 AVG(heart_rate) as avg_bpm,
@@ -108,11 +116,12 @@ def get_stats():
                 COUNT(*) as total_samples
             FROM heart_rate_data
             WHERE timestamp > datetime('now', '-1 hour')
+            AND heart_rate > 0
         ''')
-        
+
         stats = cursor.fetchone()
         conn.close()
-        
+
         return jsonify({
             'avg_bpm': round(stats['avg_bpm']) if stats['avg_bpm'] else 0,
             'min_bpm': stats['min_bpm'] if stats['min_bpm'] else 0,
@@ -128,25 +137,24 @@ def get_stats():
             'total_samples': 0
         })
 
-# API endpoint per dati recenti (ultimi 50)
+# API endpoint per dati recenti
 @app.route('/api/recent')
 def get_recent_data():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        
-        # Ultimi 50 dati
+
         cursor.execute('''
             SELECT heart_rate, latitude, longitude, timestamp
             FROM heart_rate_data
+            WHERE heart_rate > 0
             ORDER BY timestamp DESC
             LIMIT 50
         ''')
-        
+
         rows = cursor.fetchall()
         conn.close()
-        
-        # Converti in lista di dict
+
         data = []
         for row in rows:
             data.append({
@@ -155,13 +163,12 @@ def get_recent_data():
                 'longitude': row['longitude'],
                 'timestamp': row['timestamp']
             })
-        
-        # Inverti l'ordine (dal più vecchio al più recente per il grafico)
+
         data.reverse()
-        
         return jsonify(data)
+
     except Exception as e:
-        print(f"❌ Errore recent  {e}")
+        print(f"❌ Errore recent: {e}")
         return jsonify([])
 
 # Socket.IO: Ricevi dati dal device Flutter
@@ -169,44 +176,51 @@ def get_recent_data():
 def handle_heart_rate_data(data):
     try:
         device_id = data.get('device_id', 'unknown')
-        heart_rate = decode_heart_rate(data)
         latitude = data.get('latitude')
         longitude = data.get('longitude')
-        
-        print(f"📊 Ricevuto - Device: {device_id}, BPM: {heart_rate}, GPS: {latitude}, {longitude}")
-        
-        # Salva nel database
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO heart_rate_data (device_id, heart_rate, latitude, longitude)
-            VALUES (?, ?, ?, ?)
-        ''', (device_id, heart_rate, latitude, longitude))
-        
-        conn.commit()
-        conn.close()
-        
-        # Invia ai client web connessi
-        emit('new_heart_rate', {
-            'device_id': device_id,
-            'heart_rate': heart_rate,
-            'latitude': latitude,
-            'longitude': longitude,
-            'timestamp': datetime.now().isoformat()
-        }, broadcast=True)
-        
-        print(f"✅ Dati salvati e inviati ai client web")
-        
-    except Exception as e:
-        print(f"❌ Errore handle_heart_rate_ {e}")
 
-# Socket.IO: Connessione client
+        # Decodifica heart rate
+        heart_rate = decode_heart_rate(data)
+
+        print(f"📊 Device: {device_id}")
+        print(f"   BPM: {heart_rate}")
+        print(f"   GPS: {latitude}, {longitude}")
+
+        if heart_rate > 0:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT INTO heart_rate_data (device_id, heart_rate, latitude, longitude)
+                VALUES (?, ?, ?, ?)
+            ''', (device_id, heart_rate, latitude, longitude))
+
+            conn.commit()
+            conn.close()
+
+            emit('new_heart_rate', {
+                'device_id': device_id,
+                'heart_rate': heart_rate,
+                'latitude': latitude,
+                'longitude': longitude,
+                'timestamp': datetime.now().isoformat()
+            }, broadcast=True)
+
+            print(f"✅ Dati salvati e inviati al web")
+        else:
+            print(f"⚠️ BPM = 0, dato ignorato")
+
+    except Exception as e:
+        print(f"❌ Errore handle_heart_rate_data: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Socket.IO: Connessione
 @socketio.on('connect')
 def handle_connect():
     print('✅ Client web connesso')
 
-# Socket.IO: Disconnessione client
+# Socket.IO: Disconnessione
 @socketio.on('disconnect')
 def handle_disconnect():
     print('⚠️ Client web disconnesso')
@@ -215,13 +229,14 @@ def handle_disconnect():
 migrate_db()
 init_db()
 
+# Avvia server
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
-    
+
     print('=' * 60)
     print('🚀 COOSPO Heart Rate Monitor Server')
     print('=' * 60)
-    print(f'📡 Server in ascolto su porta {port}')
+    print(f'📡 Server su porta {port}')
     print('=' * 60)
-    
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+
+    socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
