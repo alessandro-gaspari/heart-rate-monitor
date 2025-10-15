@@ -125,6 +125,7 @@ function initChart() {
 
 // Inizializza mappa con bottone centramento moderno
 // Inizializza mappa con bottone centramento moderno
+// Inizializza mappa con bottone centramento moderno
 function initMap() {
     const mapContainer = document.getElementById('map');
     if (!mapContainer) {
@@ -133,10 +134,10 @@ function initMap() {
     }
     
     map = L.map('map', {
-        zoomControl: false // Rimuoviamo controlli default
+        zoomControl: false
     }).setView([45.4642, 9.19], 13);
     
-    // Aggiungi controllo zoom in posizione custom
+    // Aggiungi controllo zoom custom
     L.control.zoom({
         position: 'topright'
     }).addTo(map);
@@ -165,25 +166,10 @@ function initMap() {
     
     marker = L.marker([45.4642, 9.19], { icon: customIcon }).addTo(map);
     
-    // Traccia solo DRAG intenzionale (non click o zoom)
-    let isDragging = false;
-    
+    // Traccia SOLO il DRAG (ignora completamente zoom)
     map.on('dragstart', () => {
-        isDragging = true;
-    });
-    
-    map.on('dragend', () => {
-        if (isDragging) {
-            userHasMovedMap = true;
-            console.log('🗺️ Utente ha spostato la mappa manualmente');
-        }
-    });
-    
-    map.on('zoomstart', (e) => {
-        // Segna come "mosso" solo se lo zoom è manuale (non programmatico)
-        if (!e.originalEvent) return; // Ignora zoom programmatico
         userHasMovedMap = true;
-        console.log('🔍 Utente ha zoomato manualmente');
+        console.log('🗺️ Utente ha spostato la mappa manualmente');
     });
     
     // Bottone centramento stile iOS
@@ -194,14 +180,13 @@ function initMap() {
         div.style.marginRight = '10px';
         
         div.innerHTML = `
-            <button id="centerMapBtn" title="Centra sulla posizione" style="
+            <button id="centerMapBtn" title="Centra sulla tua posizione" style="
                 background: linear-gradient(135deg, #ef4444, #dc2626);
                 color: white;
                 border: none;
                 width: 50px;
                 height: 50px;
                 border-radius: 50%;
-                font-size: 24px;
                 cursor: pointer;
                 box-shadow: 0 4px 20px rgba(239, 68, 68, 0.6);
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -238,7 +223,7 @@ function initMap() {
     };
     centerBtn.addTo(map);
     
-    // Aggiungi stile CSS per animazione pulse
+    // Stile animazione pulse
     const style = document.createElement('style');
     style.textContent = `
         @keyframes pulse {
@@ -250,6 +235,7 @@ function initMap() {
     
     console.log('✅ Mappa inizializzata');
 }
+
 
 // Aggiorna posizione mappa (centra SOLO se utente non ha mai interagito)
 function updateMapPosition(latitude, longitude) {
@@ -282,6 +268,7 @@ function updateMapPosition(latitude, longitude) {
         }
     }
 }
+
 
 // Aggiungi dato al grafico
 function addDataToChart(value) {
