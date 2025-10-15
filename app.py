@@ -211,18 +211,17 @@ def handle_connect():
 def handle_disconnect():
     print('⚠️ Client web disconnesso')
 
-# Avvia server
+# Inizializza database all'avvio
+migrate_db()
+init_db()
+
 if __name__ == '__main__':
-    migrate_db()  # Migra database (aggiunge GPS se manca)
-    init_db()     # Inizializza database
-    
     port = int(os.environ.get('PORT', 10000))
     
     print('=' * 60)
     print('🚀 COOSPO Heart Rate Monitor Server')
     print('=' * 60)
     print(f'📡 Server in ascolto su porta {port}')
-    print('🌐 Dashboard disponibile su http://localhost:{}'.format(port))
     print('=' * 60)
     
-    socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)

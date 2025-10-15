@@ -153,17 +153,32 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         desiredAccuracy: LocationAccuracy.best
       ).timeout(const Duration(seconds: 5));
       
+      final newPosition = LatLng(pos.latitude, pos.longitude);
+      
       if (mounted) {
-        setState(() => currentPosition = LatLng(pos.latitude, pos.longitude));
+        setState(() => currentPosition = newPosition);
+      }
+      
+      // Centra la mappa sulla nuova posizione con animazione
+      if (mapController != null) {
+        mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: newPosition,
+              zoom: 17.0, // Zoom più vicino quando premi refresh
+            ),
+          ),
+        );
       }
       
       _showMessage('Posizione aggiornata', false);
-      print("✅ GPS aggiornato: ${pos.latitude}, ${pos.longitude}");
+      print("✅ GPS aggiornato e mappa centrata: ${pos.latitude}, ${pos.longitude}");
     } catch (e) {
       print("❌ Errore refresh GPS: $e");
       _showMessage('Errore aggiornamento GPS', true);
     }
   }
+
 
   void _triggerHeartbeat() {
     _heartbeatController.forward().then((_) {
