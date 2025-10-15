@@ -149,28 +149,25 @@ function updateMapPosition(lat, lng) {
 function initMap() {
     map = L.map('map', { zoomControl: false }).setView([45.4642, 9.19], 13);
     
-    L.control.zoom({ position: 'topright' }).addTo(map);    
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19
     }).addTo(map);
 
-    // Marker GPS
-    const markerHtml = `
-        <div style="position: relative; width: 30px; height: 30px;">
-            <div style="position: absolute; width: 30px; height: 30px; background: rgba(239, 68, 68, 0.3); border-radius: 50%; animation: pulse 2s infinite;"></div>
-            <div style="position: absolute; top: 5px; left: 5px; width: 20px; height: 20px; background: #ef4444; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 20px rgba(239,68,68,0.8);"></div>
-        </div>
-    `;
-    
-    const customIcon = L.divIcon({
-        className: 'custom-marker',
-        html: markerHtml,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
+    // MARKER CON ICON CORRETTO (anchor al centro perfetto)
+    const pulseIcon = L.divIcon({
+        className: 'gps-marker',
+        html: `
+            <div class="marker-pulse"></div>
+            <div class="marker-dot"></div>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]  // CENTRO ESATTO del marker
     });
     
-    marker = L.marker(lastKnownPosition, { icon: customIcon }).addTo(map);
+    marker = L.marker(lastKnownPosition, { icon: pulseIcon }).addTo(map);
 
     // Bottone centramento
     const centerBtn = L.control({ position: 'bottomright' });
@@ -208,7 +205,6 @@ function initMap() {
         
         div.onclick = function(e) {
             e.stopPropagation();
-            // Centra sul marker con zoom 16
             map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
         };
         
@@ -216,18 +212,57 @@ function initMap() {
     };
     centerBtn.addTo(map);
 
-    // CSS animazione
+    // CSS per marker GPS
     const style = document.createElement('style');
     style.textContent = `
+        .gps-marker {
+            position: relative;
+            width: 20px;
+            height: 20px;
+        }
+        
+        .marker-pulse {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            background: rgba(239, 68, 68, 0.3);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .marker-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 16px;
+            height: 16px;
+            background: #ef4444;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+            z-index: 1000;
+        }
+        
         @keyframes pulse {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(2.5); opacity: 0; }
+            0%, 100% { 
+                transform: translate(-50%, -50%) scale(1); 
+                opacity: 1; 
+            }
+            50% { 
+                transform: translate(-50%, -50%) scale(2); 
+                opacity: 0; 
+            }
         }
     `;
     document.head.appendChild(style);
     
     console.log('✅ Mappa inizializzata');
 }
+
 
 
 // Aggiungi dato al grafico
