@@ -10,7 +10,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'coospo_heart_rate_monitor_secret_2024'
 CORS(app)
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Connessione al database SQLite
 def get_db_connection():
@@ -225,4 +225,4 @@ if __name__ == '__main__':
     print('🌐 Dashboard disponibile su http://localhost:{}'.format(port))
     print('=' * 60)
     
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=port, debug=False)
