@@ -125,16 +125,16 @@ function initChart() {
     console.log('✅ Grafico inizializzato');
 }
 
+
 function updateMapPosition(lat, lng) {
     if (!map || !marker) return;
+    
     lastKnownPosition = [lat, lng];
+    
+    // AGGIORNA SOLO IL MARKER - MAI LA VISTA
     marker.setLatLng(lastKnownPosition);
-    // NON spostare la mappa mai più dopo interazione utente.
-    // La view va aggiornata solo se la mappa non è stata lockata.
-    if (!userHasLockedMap) {
-        map.setView(lastKnownPosition, 16, {animate: false});
-    }
-    // Aggiorna barra di stato GPS
+    
+    // Aggiorna GPS status
     const gpsStatus = document.getElementById('gpsStatus');
     if (gpsStatus) {
         gpsStatus.innerHTML = `
@@ -148,74 +148,70 @@ function updateMapPosition(lat, lng) {
 
 function initMap() {
     map = L.map('map', { zoomControl: false }).setView([45.4642, 9.19], 13);
-    L.control.zoom({ position: 'topright'}).addTo(map);
+    
+    L.control.zoom({ position: 'topright' }).addTo(map);    
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap contributors © CARTO',
-        maxZoom: 19,
-        subdomains: 'abcd'
+        attribution: '© OpenStreetMap',
+        maxZoom: 19
     }).addTo(map);
 
-    // Marker customizzato
+    // Marker GPS
     const markerHtml = `
         <div style="position: relative; width: 30px; height: 30px;">
             <div style="position: absolute; width: 30px; height: 30px; background: rgba(239, 68, 68, 0.3); border-radius: 50%; animation: pulse 2s infinite;"></div>
             <div style="position: absolute; top: 5px; left: 5px; width: 20px; height: 20px; background: #ef4444; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 20px rgba(239,68,68,0.8);"></div>
         </div>
     `;
+    
     const customIcon = L.divIcon({
         className: 'custom-marker',
         html: markerHtml,
         iconSize: [30, 30],
         iconAnchor: [15, 15]
     });
+    
     marker = L.marker(lastKnownPosition, { icon: customIcon }).addTo(map);
 
-    // Blocca auto-pan dopo QUALSIASI interazione (zoom, pan)
-    map.on('movestart zoomstart', e => {
-        if (e.originalEvent) {
-            userHasLockedMap = true;
-        }
-    });
-
-    // Bottone centramento ultra visibile in basso a destra
+    // Bottone centramento
     const centerBtn = L.control({ position: 'bottomright' });
     centerBtn.onAdd = function() {
         const div = L.DomUtil.create('div', 'leaflet-bar');
         div.style.marginBottom = '20px';
         div.style.marginRight = '10px';
+        
         div.innerHTML = `
-            <button id="centerMapBtn" title="Centra sulla posizione GPS" style="
+            <button title="Centra su GPS" style="
                 background: linear-gradient(135deg, #ef4444, #dc2626);
                 color: white;
                 border: none;
                 width: 52px;
                 height: 52px;
                 border-radius: 50%;
-                font-size: 26px;
                 cursor: pointer;
                 box-shadow: 0 4px 20px rgba(239, 68, 68, 0.7);
                 display: flex;
                 align-items: center;
                 justify-content: center;
-            ">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <circle cx="12" cy="12" r="10"></circle>
-                <circle cx="12" cy="12" r="3"></circle>
-                <line x1="12" y1="2" x2="12" y2="6"></line>
-                <line x1="12" y1="18" x2="12" y2="22"></line>
-                <line x1="2" y1="12" x2="6" y2="12"></line>
-                <line x1="18" y1="12" x2="22" y2="12"></line>
-            </svg>
+                transition: transform 0.2s ease;
+            " onmouseover="this.style.transform='scale(1.1)'" 
+               onmouseout="this.style.transform='scale(1)'">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                </svg>
             </button>
         `;
+        
         div.onclick = function(e) {
             e.stopPropagation();
-            // Ricentra la mappa esattamente sul marker, zoom 16
-            if (marker && lastKnownPosition) {
-                map.setView(lastKnownPosition, 16, {animate: true, duration: 1});
-                userHasLockedMap = false;
-            }
+            // Centra sul marker con zoom 16
+            map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
         };
+        
         return div;
     };
     centerBtn.addTo(map);
@@ -229,6 +225,7 @@ function initMap() {
         }
     `;
     document.head.appendChild(style);
+    
     console.log('✅ Mappa inizializzata');
 }
 
