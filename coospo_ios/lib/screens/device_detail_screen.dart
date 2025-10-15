@@ -3,13 +3,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:geolocator/geolocator.dart';
+import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
 
 CoospoDeviceType getCoospoDeviceType(String deviceName) {
   deviceName = deviceName.toLowerCase();
   if (!deviceName.contains('coospo')) return CoospoDeviceType.none;
-  if (deviceName.contains('heart rate') || deviceName.contains('h6') || deviceName.contains('h7')) {
+  if (deviceName.contains('heart rate') || deviceName.contains('h6') || deviceName.contains('h7') || deviceName.contains('808')) {
     return CoospoDeviceType.heartRateBand;
   }
   if (deviceName.contains('armband') || deviceName.contains('pod')) {
@@ -46,6 +48,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   bool isStreaming = false;
   int currentHeartRate = 0;
   int signalStrength = -50;
+  bool isMapExpanded = false;
   
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
   StreamSubscription<List<int>>? _characteristicSubscription;
@@ -55,6 +58,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   late AnimationController _heartbeatController;
   late CoospoDeviceType deviceType;
   late Color deviceColor;
+  
+  AppleMapController? mapController;
+  LatLng? currentPosition;
+  StreamSubscription<Position>? positionStream;
   
   final String serverUrl = 'https://heart-rate-monitor-hu47.onrender.com';
 
@@ -70,6 +77,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     );
 
     _listenToDeviceState();
+    _startTracking();
   }
 
   @override
@@ -79,7 +87,82 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     _stopBleReading();
     _stopStreaming();
     _deviceStateSubscription?.cancel();
+    positionStream?.cancel();
     super.dispose();
+  }
+
+  void _startTracking() async {
+    print("🌍 Inizio tracking GPS...");
+    
+    // Posizione default immediata
+    if (mounted) {
+      setState(() => currentPosition = const LatLng(45.4642, 9.19));
+    }
+    
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => false,
+      );
+      
+      if (!serviceEnabled) {
+        print("⚠️ GPS non attivo");
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        print("❌ Permessi GPS negati");
+        return;
+      }
+
+      Position pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best
+      ).timeout(const Duration(seconds: 5));
+      
+      print("✅ Posizione GPS: ${pos.latitude}, ${pos.longitude}");
+      
+      if (mounted) {
+        setState(() => currentPosition = LatLng(pos.latitude, pos.longitude));
+      }
+
+      positionStream = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.best,
+          distanceFilter: 5,
+        )).listen((Position p) {
+        if (mounted) {
+          setState(() => currentPosition = LatLng(p.latitude, p.longitude));
+        }
+      });
+      
+      print("✅ GPS tracking attivo");
+    } catch (e) {
+      print("❌ Errore GPS: $e");
+    }
+  }
+
+  Future<void> _refreshGPS() async {
+    print("🔄 Refresh GPS manuale...");
+    try {
+      Position pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best
+      ).timeout(const Duration(seconds: 5));
+      
+      if (mounted) {
+        setState(() => currentPosition = LatLng(pos.latitude, pos.longitude));
+      }
+      
+      _showMessage('Posizione aggiornata', false);
+      print("✅ GPS aggiornato: ${pos.latitude}, ${pos.longitude}");
+    } catch (e) {
+      print("❌ Errore refresh GPS: $e");
+      _showMessage('Errore aggiornamento GPS', true);
+    }
   }
 
   void _triggerHeartbeat() {
@@ -125,9 +208,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
             signalStrength = rssi;
           });
         }
-      }).catchError((e) {
-        print('Errore RSSI: $e');
-      });
+      }).catchError((e) {});
     });
   }
 
@@ -161,7 +242,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
   Future<void> _disconnect() async {
-    print('🔴 DISCONNESSIONE FORZATA IMMEDIATA');
+    print('🔴 DISCONNESSIONE');
     
     if (isStreaming) {
       await _stopStreaming();
@@ -173,9 +254,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     _rssiTimer?.cancel();
     _rssiTimer = null;
     
-    await _deviceStateSubscription?.cancel();
-    _deviceStateSubscription = null;
-    
     setState(() {
       isConnected = false;
       isStreaming = false;
@@ -183,30 +261,21 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     });
     
     try {
-      print('Disconnessione Bluetooth...');
-      await widget.device.disconnect(timeout: 5).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          print('⚠️ Timeout disconnessione - forzando chiusura');
-        },
-      );
-      print('✅ Bluetooth disconnesso');
+      await widget.device.disconnect();
+      print('✅ Disconnesso');
     } catch (e) {
-      print('❌ Errore disconnect (ignorato): $e');
+      print('❌ Errore disconnect: $e');
     }
     
     _showMessage('Disconnesso', false);
-    print('✅ Disconnessione completata');
   }
 
   Future<void> _startBleReading() async {
     print('=== INIZIO LETTURA BLE ===');
 
     try {
-      print('Ricerca servizi BLE...');
       List<BluetoothService> services = await widget.device.discoverServices();
-      print('Trovati ${services.length} servizi');
-
+      
       final Guid characteristicUuid = Guid("00002a37-0000-1000-8000-00805f9b34fb");
       
       BluetoothCharacteristic? characteristic;
@@ -215,20 +284,16 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           characteristic = service.characteristics.firstWhere(
             (c) => c.uuid == characteristicUuid,
           );
-          print('✅ Caratteristica trovata');
           break;
         } catch (_) {}
       }
 
       if (characteristic == null) {
-        print('❌ Caratteristica non trovata!');
         _showMessage('Caratteristica non trovata', true);
         return;
       }
 
-      print('Abilitazione notifiche...');
       await characteristic.setNotifyValue(true);
-      print('✅ Notifiche abilitate');
 
       _characteristicSubscription = characteristic.value.listen((data) {
         if (data.isEmpty) return;
@@ -247,17 +312,16 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           }
         }
       });
-
+      
       print('✅ Lettura BLE attiva');
       
     } catch (e) {
       print('❌ ERRORE BLE: $e');
-      _showMessage('Errore lettura BLE: $e', true);
+      _showMessage('Errore BLE: $e', true);
     }
   }
 
   Future<void> _stopBleReading() async {
-    print('=== FINE LETTURA BLE ===');
     await _characteristicSubscription?.cancel();
     _characteristicSubscription = null;
   }
@@ -268,12 +332,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       return;
     }
 
-    print('=== INIZIO STREAMING AL SERVER ===');
+    print('=== INIZIO STREAMING ===');
     setState(() => isStreaming = true);
 
     try {
-      print('🔌 Connessione Socket.IO: $serverUrl');
-      
       _socket = IO.io(serverUrl, <String, dynamic>{
         'transports': ['websocket'],
         'autoConnect': false,
@@ -286,13 +348,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         _showMessage('Streaming avviato', false);
       });
       
-      _socket?.onDisconnect((_) {
-        print('⚠️ Socket.IO disconnesso');
-      });
-      
-      _socket?.onError((error) {
-        print('❌ Errore Socket.IO: $error');
-      });
+      _socket?.onDisconnect((_) => print('⚠️ Socket disconnesso'));
+      _socket?.onError((error) => print('❌ Errore Socket.IO: $error'));
       
     } catch (e) {
       print('❌ ERRORE STREAMING: $e');
@@ -302,10 +359,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
   void _sendToServer(List<int> data) {
-    if (_socket == null || !_socket!.connected) {
-      print('❌ Socket non connesso');
-      return;
-    }
+    if (_socket == null || !_socket!.connected) return;
     
     final encoded = base64.encode(data);
     final deviceTypeStr = deviceType.toString().split('.').last;
@@ -313,15 +367,13 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     final message = {
       'device_type': deviceTypeStr,
       'device_id': widget.device.platformName,
-      'data': encoded
+      'data': encoded,
+      'latitude': currentPosition?.latitude,
+      'longitude': currentPosition?.longitude,
     };
     
-    try {
-      _socket?.emit('heart_rate_data', message);
-      print('✅ Dati inviati al server');
-    } catch (e) {
-      print('❌ Errore invio: $e');
-    }
+    _socket?.emit('heart_rate_data', message);
+    print("📍 Dati + GPS inviati: ${currentPosition?.latitude}, ${currentPosition?.longitude}");
   }
 
   Future<void> _stopStreaming() async {
@@ -331,28 +383,9 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
-    
-    print('✅ Streaming terminato');
   }
 
   int _decodeData(List<int> data) {
-    if (deviceType == CoospoDeviceType.heartRateBand) {
-      if (data.isEmpty) return 0;
-      int flags = data[0];
-      bool is16Bit = (flags & 0x01) != 0;
-      if (is16Bit && data.length >= 3) {
-        return (data[2] << 8) | data[1];
-      } else if (data.length >= 2) {
-        return data[1];
-      }
-      return 0;
-    } else if (deviceType == CoospoDeviceType.armband) {
-      if (data.length >= 2) {
-        return data[1];
-      }
-      return 0;
-    }
-
     if (data.isEmpty) return 0;
     int flags = data[0];
     bool is16Bit = (flags & 0x01) != 0;
@@ -384,17 +417,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       appBar: AppBar(
         backgroundColor: const Color(0xFF0A0E21),
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
           widget.device.platformName.isEmpty ? 'Dispositivo' : widget.device.platformName,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            letterSpacing: 1,
           ),
         ),
         centerTitle: true,
@@ -410,13 +438,13 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
               ),
               child: Row(
                 children: [
-                  Icon(signalIcon, color: signalColor, size: 20),
+                  Icon(signalIcon, color: signalColor, size: 18),
                   const SizedBox(width: 6),
                   Text(
                     '${signalStrength} dBm',
                     style: TextStyle(
                       color: signalColor,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -426,189 +454,259 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           ),
         ],
       ),
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+      body: Stack(
+        children: [
+          Column(
             children: [
-              ScaleTransition(
-                scale: Tween<double>(begin: 1.0, end: 1.3).animate(
-                  CurvedAnimation(
-                    parent: _heartbeatController,
-                    curve: Curves.easeOut,
+              // MAPPA APPLE CON BOTTONE REFRESH
+              Stack(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.easeInOut,
+                    height: isMapExpanded ? MediaQuery.of(context).size.height * 0.5 : 180,
+                    margin: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: deviceColor.withOpacity(0.3),
+                          blurRadius: 10,
+                          spreadRadius: 2,
+                        )
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: AppleMap(
+                        onMapCreated: (controller) => mapController = controller,
+                        initialCameraPosition: CameraPosition(
+                          target: currentPosition ?? const LatLng(45.4642, 9.19),
+                          zoom: 16.0,
+                        ),
+                        myLocationEnabled: true,
+                        myLocationButtonEnabled: false,
+                        compassEnabled: true,
+                      ),
+                    ),
                   ),
-                ),
-                child: Container(
-                  width: 200,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: deviceColor.withOpacity(0.4),
-                        blurRadius: 40,
-                        spreadRadius: 10,
+                  
+                  // Bottone refresh GPS
+                  Positioned(
+                    top: 30,
+                    right: 30,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: deviceColor,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: deviceColor.withOpacity(0.6),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          )
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.my_location, color: Colors.white),
+                        iconSize: 24,
+                        onPressed: _refreshGPS,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              
+              // Pulsante espandi/comprimi
+              InkWell(
+                onTap: () => setState(() => isMapExpanded = !isMapExpanded),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isMapExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        color: Colors.white54,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isMapExpanded ? 'Comprimi' : 'Espandi',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 14,
+                        ),
                       ),
                     ],
                   ),
-                  child: Center(
-                    child: Text(
-                      '❤️',
-                      style: TextStyle(
-                        fontSize: 100,
-                        shadows: [
-                          Shadow(
-                            color: deviceColor.withOpacity(0.6),
-                            blurRadius: 20,
+                ),
+              ),
+              
+              // BATTITO
+              if (!isMapExpanded)
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          ScaleTransition(
+                            scale: Tween<double>(begin: 1.0, end: 1.2).animate(
+                              CurvedAnimation(
+                                parent: _heartbeatController,
+                                curve: Curves.easeOut,
+                              ),
+                            ),
+                            child: Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: deviceColor.withOpacity(0.4),
+                                    blurRadius: 30,
+                                    spreadRadius: 5,
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '❤️',
+                                  style: const TextStyle(fontSize: 60),
+                                ),
+                              ),
+                            ),
                           ),
+                          const SizedBox(height: 20),
+                          Text(
+                            currentHeartRate > 0 ? '$currentHeartRate' : '--',
+                            style: TextStyle(
+                              fontSize: 70,
+                              fontWeight: FontWeight.w900,
+                              color: deviceColor,
+                            ),
+                          ),
+                          Text(
+                            'BPM',
+                            style: TextStyle(
+                              fontSize: 20,
+                              color: deviceColor.withOpacity(0.7),
+                              letterSpacing: 6,
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+                          if (!isConnected)
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _connectToDevice,
+                                icon: const Icon(Icons.bluetooth_connected, size: 24),
+                                label: const Text(
+                                  'CONNETTI',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: deviceColor,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                ),
+                              ),
+                            ),
+                          if (isConnected) ...[
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: isStreaming ? _stopStreaming : _startStreaming,
+                                icon: Icon(isStreaming ? Icons.stop_circle : Icons.cloud_upload, size: 24),
+                                label: Text(
+                                  isStreaming ? 'STOP STREAM' : 'START STREAM',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isStreaming ? Colors.red : deviceColor,
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _disconnect,
+                                icon: const Icon(Icons.bluetooth_disabled, size: 22),
+                                label: const Text(
+                                  'DISCONNETTI',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                  side: const BorderSide(color: Colors.red, width: 2),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ),
                 ),
-              ),
-              
-              const SizedBox(height: 50),
-              
-              Text(
-                currentHeartRate > 0 ? '$currentHeartRate' : '--',
-                style: TextStyle(
-                  fontSize: 100,
-                  fontWeight: FontWeight.w900,
-                  color: deviceColor,
-                  letterSpacing: -2,
-                  shadows: [
-                    Shadow(
-                      color: deviceColor.withOpacity(0.5),
+            ],
+          ),
+          
+          // Mini widget BPM quando mappa espansa
+          if (isMapExpanded)
+            Positioned(
+              bottom: 30,
+              right: 20,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(50),
+                  border: Border.all(color: deviceColor, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: deviceColor.withOpacity(0.6),
                       blurRadius: 15,
+                      spreadRadius: 3,
+                    )
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.favorite, color: deviceColor, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      currentHeartRate > 0 ? '$currentHeartRate BPM' : '-- BPM',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
               ),
-              
-              Text(
-                'BPM',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w600,
-                  color: deviceColor.withOpacity(0.7),
-                  letterSpacing: 8,
-                ),
-              ),
-              
-              const SizedBox(height: 80),
-              
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Column(
-                  children: [
-                    if (!isConnected)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _connectToDevice,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: deviceColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            elevation: 12,
-                            shadowColor: deviceColor.withOpacity(0.6),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.bluetooth_connected, size: 32),
-                              SizedBox(width: 12),
-                              Text(
-                                'CONNETTI',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    
-                    if (isConnected) ...[
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: isStreaming ? _stopStreaming : _startStreaming,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isStreaming ? Colors.red : deviceColor,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            elevation: 12,
-                            shadowColor: (isStreaming ? Colors.red : deviceColor).withOpacity(0.6),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                isStreaming ? Icons.stop_circle : Icons.cloud_upload,
-                                size: 32,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                isStreaming ? 'STOP STREAM' : 'START STREAM',
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 16),
-                      
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: _disconnect,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                            side: const BorderSide(color: Colors.red, width: 2),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.bluetooth_disabled, size: 28),
-                              SizedBox(width: 12),
-                              Text(
-                                'DISCONNETTI',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }

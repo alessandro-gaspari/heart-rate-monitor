@@ -1,68 +1,12 @@
-var chart;
-var socket;
-var maxDataPoints = 50;
+console.log('📊 Dashboard script caricato');
 
-// Colori per device type
-const deviceColors = {
-    'heartRateBand': '#FF4444',
-    'armband': '#FF8C00',
-    'unknown': '#9B59B6',
-    'none': '#3498DB'
-};
+let chart;
+let socket;
+let currentBpm = 0;
+let map;
+let marker;
 
-function getDeviceColor(deviceType) {
-    return deviceColors[deviceType] || deviceColors['none'];
-}
-
-function initSocketIO() {
-    console.log('🔌 Connessione Socket.IO...');
-    
-    socket = io();
-    
-    socket.on('connect', function() {
-        console.log('✅ Connesso');
-        socket.emit('dashboard');
-        document.getElementById('statusText').textContent = 'Connesso';
-        document.getElementById('connectionDot').classList.add('connected');
-    });
-    
-    socket.on('heart_rate_update', function(data) {
-        console.log('📨 Dati ricevuti:', data);
-        var deviceType = data.device_type || 'unknown';
-        var color = getDeviceColor(deviceType);
-        updateCurrentBPM(data.heart_rate, data.timestamp, deviceType, color);
-        addDataToChart(data.timestamp, data.heart_rate, color);
-    });
-    
-    socket.on('disconnect', function() {
-        console.log('⚠️ Disconnesso');
-        document.getElementById('statusText').textContent = 'Disconnesso';
-        document.getElementById('connectionDot').classList.remove('connected');
-    });
-    
-    socket.on('error', function(error) {
-        console.error('❌ Errore Socket.IO:', error);
-    });
-}
-
-function updateCurrentBPM(bpm, timestamp, deviceType, color) {
-    var bpmElement = document.getElementById('currentBpm');
-    bpmElement.textContent = bpm;
-    bpmElement.style.color = color;
-    
-    var heartIcon = document.getElementById('heartIcon');
-    heartIcon.style.animation = 'none';
-    setTimeout(function() {
-        heartIcon.style.animation = 'heartbeat 1.2s infinite';
-    }, 10);
-    
-    var date = new Date(timestamp);
-    var timeString = date.toLocaleTimeString('it-IT');
-    
-    document.getElementById('lastUpdate').textContent = 
-        'Ultimo aggiornamento: ' + timeString + ' | Dispositivo: ' + deviceType;
-}
-
+// Inizializza grafico Chart.js
 function initChart() {
     var ctx = document.getElementById('heartRateChart');
     if (!ctx) {
@@ -72,11 +16,11 @@ function initChart() {
     
     chart = new Chart(ctx, {
         type: 'line',
-        data: {   // 🔧 aggiunto "data"
+        data: {
             labels: [],
             datasets: [{
                 label: 'Heart Rate (BPM)',
-                data: [],   // 🔧 aggiunto "data: []"
+                data: [],
                 borderColor: '#06b6d4',
                 backgroundColor: 'rgba(6, 182, 212, 0.1)',
                 borderWidth: 3,
@@ -168,69 +112,84 @@ function initChart() {
     console.log('✅ Grafico inizializzato');
 }
 
-function addDataToChart(timestamp, value, color) {
-    if (!chart) {
-        console.error('❌ Grafico non inizializzato');
+// Inizializza mappa Leaflet
+function initMap() {
+    const mapElement = document.getElementById('map');
+    if (!mapElement) {
+        console.error('❌ Elemento mappa non trovato');
         return;
     }
     
-    var date = new Date(timestamp);
-    var timeLabel = date.toLocaleTimeString('it-IT');
-    
-    chart.data.labels.push(timeLabel);
-    chart.data.datasets[0].data.push(value);
-    
-    // Aggiorna colore linea
-    chart.data.datasets[0].borderColor = color;
-    chart.data.datasets[0].pointBackgroundColor = color;
-    
-    // Mantieni solo gli ultimi N punti
-    if (chart.data.labels.length > maxDataPoints) {
-        chart.data.labels.shift();
-        chart.data.datasets[0].data.shift();
+    try {
+        // Milano default
+        map = L.map('map').setView([45.4642, 9.19], 13);
+        
+        // Tema scuro stile sportivo
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors © CARTO',
+            maxZoom: 19,
+            subdomains: 'abcd'
+        }).addTo(map);
+        
+        // Marker personalizzato con pulse
+        const markerHtml = `
+            <div style="
+                position: relative;
+                width: 30px;
+                height: 30px;
+            ">
+                <div style="
+                    position: absolute;
+                    width: 30px;
+                    height: 30px;
+                    background: rgba(6, 182, 212, 0.3);
+                    border-radius: 50%;
+                    animation: pulse 2s infinite;
+                "></div>
+                <div style="
+                    position: absolute;
+                    top: 5px;
+                    left: 5px;
+                    width: 20px;
+                    height: 20px;
+                    background: #06b6d4;
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 0 20px rgba(6,182,212,0.8);
+                "></div>
+            </div>
+        `;
+        
+        const customIcon = L.divIcon({
+            className: 'custom-marker',
+            html: markerHtml,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+        });
+        
+        marker = L.marker([45.4642, 9.19], {icon: customIcon}).addTo(map);
+        
+        console.log('✅ Mappa inizializzata');
+        
+        // CSS per animazione pulse
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+                100% {
+                    transform: scale(3);
+                    opacity: 0;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+        
+    } catch (error) {
+        console.error('❌ Errore inizializzazione mappa:', error);
     }
-    
-    chart.update('none');
 }
 
-function loadStatistics() {
-    fetch('/api/statistics')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(stats) {
-            document.getElementById('avgBpm').textContent = stats.avg_hr || '--';
-            document.getElementById('minBpm').textContent = stats.min_hr || '--';
-            document.getElementById('maxBpm').textContent = stats.max_hr || '--';
-            document.getElementById('totalSamples').textContent = stats.total_samples || '--';
-        })
-        .catch(function(error) {
-            console.error('❌ Errore statistiche:', error);
-        });
-}
-
-function loadHistory() {
-    fetch('/api/history/5')
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            data.reverse().forEach(function(item) {
-                var color = getDeviceColor(item.device_type || 'unknown');
-                addDataToChart(item.timestamp, item.heart_rate, color);
-            });
-        })
-        .catch(function(error) {
-            console.error('❌ Errore storico:', error);
-        });
-}
-
-// Inizializzazione al caricamento pagina
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('📊 Inizializzazione dashboard...');
-    initChart();
-    initSocketIO();
-    loadHistory();
-    loadStatistics();
-    setInterval(loadStatistics, 5000);
-});
+// (il resto del codice è già sintatticamente corretto e non richiede modifiche)

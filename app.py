@@ -158,30 +158,36 @@ def handle_dashboard():
 @socketio.on('heart_rate_data')
 def handle_heart_rate_data(data):
     try:
-        device_type = data.get("device_type", "unknown")
-        device_id = data.get("device_id", "COOSPO")
-        data_b64 = data.get("data", "")
+        device_id = data.get('device_id', 'unknown')
+        heart_rate = decode_heart_rate(data)
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
         
-        decoded_data = base64.b64decode(data_b64)
-        heart_rate, rr_intervals = decode_heart_rate(device_type, decoded_data)
+        conn = get_db_connection()
+        cursor = conn.cursor()
         
-        if heart_rate:
-            print(f"❤️  {heart_rate} bpm | Device: {device_type}")
-            save_to_database(heart_rate, rr_intervals, device_id, device_type)
-            
-            response = {
-                'heart_rate': heart_rate,
-                'rr_intervals': rr_intervals,
-                'timestamp': datetime.now().isoformat(),
-                'device_type': device_type,
-                'device_id': device_id
-            }
-            
-            # Invia a tutti i client (dashboard e flutter)
-            emit('heart_rate_update', response, broadcast=True)
-            
+        cursor.execute('''
+            INSERT INTO heart_rate_data (device_id, heart_rate, latitude, longitude)
+            VALUES (?, ?, ?, ?)
+        ''', (device_id, heart_rate, latitude, longitude))
+        
+        conn.commit()
+        conn.close()
+        
+        # Invia ai client web
+        emit('new_heart_rate', {
+            'device_id': device_id,
+            'heart_rate': heart_rate,
+            'latitude': latitude,
+            'longitude': longitude,
+            'timestamp': datetime.now().isoformat()
+        }, broadcast=True)
+        
+        print(f"✅ BPM: {heart_rate}, GPS: {latitude}, {longitude}")
+        
     except Exception as e:
         print(f"❌ Errore: {e}")
+
 
 if __name__ == '__main__':
     init_database()

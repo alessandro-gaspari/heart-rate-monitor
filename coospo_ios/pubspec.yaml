@@ -16,6 +16,7 @@ dependencies:
   flutter_blue_plus: ^1.32.11
   permission_handler: ^11.3.0
   socket_io_client: ^2.0.3+1
+  apple_maps_flutter: ^1.2.1
 
 dev_dependencies:
   flutter_test:
