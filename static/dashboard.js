@@ -123,9 +123,7 @@ function initChart() {
     console.log('✅ Grafico inizializzato');
 }
 
-// Inizializza mappa con bottone centramento moderno
-// Inizializza mappa con bottone centramento moderno
-// Inizializza mappa con bottone centramento moderno
+// Inizializza mappa - VERSIONE MINIMALISTA
 function initMap() {
     const mapContainer = document.getElementById('map');
     if (!mapContainer) {
@@ -133,23 +131,16 @@ function initMap() {
         return;
     }
     
-    map = L.map('map', {
-        zoomControl: false
-    }).setView([45.4642, 9.19], 13);
+    // Crea mappa senza opzioni complesse
+    map = L.map('map').setView([45.4642, 9.19], 13);
     
-    // Aggiungi controllo zoom custom
-    L.control.zoom({
-        position: 'topright'
-    }).addTo(map);
-    
-    // Tema dark sportivo
+    // Tema dark
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap contributors © CARTO',
-        maxZoom: 19,
-        subdomains: 'abcd'
+        attribution: '© OpenStreetMap',
+        maxZoom: 19
     }).addTo(map);
     
-    // Marker pulsante personalizzato
+    // Marker rosso pulsante
     const markerHtml = `
         <div style="position: relative; width: 30px; height: 30px;">
             <div style="position: absolute; width: 30px; height: 30px; background: rgba(239, 68, 68, 0.3); border-radius: 50%; animation: pulse 2s infinite;"></div>
@@ -166,21 +157,24 @@ function initMap() {
     
     marker = L.marker([45.4642, 9.19], { icon: customIcon }).addTo(map);
     
-    // Traccia SOLO il DRAG (ignora completamente zoom)
-    map.on('dragstart', () => {
-        userHasMovedMap = true;
-        console.log('🗺️ Utente ha spostato la mappa manualmente');
+    // TRIGGER: qualsiasi interazione dell'utente blocca l'auto-centramento
+    map.on('movestart', (e) => {
+        // Se il movimento è causato dall'utente (non da codice)
+        if (e.originalEvent) {
+            userHasMovedMap = true;
+            console.log('🔒 Mappa bloccata - utente ha interagito');
+        }
     });
     
-    // Bottone centramento stile iOS
+    // Bottone centramento
     const centerBtn = L.control({ position: 'bottomright' });
     centerBtn.onAdd = function() {
-        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+        const div = L.DomUtil.create('div', 'leaflet-bar');
         div.style.marginBottom = '20px';
         div.style.marginRight = '10px';
         
         div.innerHTML = `
-            <button id="centerMapBtn" title="Centra sulla tua posizione" style="
+            <button title="Centra sulla posizione GPS" style="
                 background: linear-gradient(135deg, #ef4444, #dc2626);
                 color: white;
                 border: none;
@@ -189,13 +183,13 @@ function initMap() {
                 border-radius: 50%;
                 cursor: pointer;
                 box-shadow: 0 4px 20px rgba(239, 68, 68, 0.6);
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                transition: all 0.3s ease;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-            " onmouseover="this.style.transform='scale(1.15) rotate(90deg)'; this.style.boxShadow='0 6px 30px rgba(239, 68, 68, 0.8)';" 
-               onmouseout="this.style.transform='scale(1) rotate(0deg)'; this.style.boxShadow='0 4px 20px rgba(239, 68, 68, 0.6)';">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            " onmouseover="this.style.transform='scale(1.1)'; this.style.boxShadow='0 6px 30px rgba(239, 68, 68, 0.8)';" 
+               onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 4px 20px rgba(239, 68, 68, 0.6)';">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <circle cx="12" cy="12" r="10"></circle>
                     <circle cx="12" cy="12" r="3"></circle>
                     <line x1="12" y1="2" x2="12" y2="6"></line>
@@ -209,13 +203,10 @@ function initMap() {
         div.onclick = function(e) {
             e.stopPropagation();
             if (marker) {
-                map.setView(marker.getLatLng(), 17, { 
-                    animate: true, 
-                    duration: 1,
-                    easeLinearity: 0.25
-                });
+                const pos = marker.getLatLng();
+                map.setView(pos, 17, { animate: true, duration: 1 });
                 userHasMovedMap = false;
-                console.log('📍 Mappa ricentrata sulla posizione');
+                console.log('📍 Ricentrato su GPS - auto-follow riattivato');
             }
         };
         
@@ -223,7 +214,7 @@ function initMap() {
     };
     centerBtn.addTo(map);
     
-    // Stile animazione pulse
+    // CSS animazione
     const style = document.createElement('style');
     style.textContent = `
         @keyframes pulse {
@@ -239,19 +230,23 @@ function initMap() {
 
 // Aggiorna posizione mappa (centra SOLO se utente non ha mai interagito)
 function updateMapPosition(latitude, longitude) {
-    if (!map || !marker) return;
+    if (!map || !marker) {
+        console.warn('⚠️ Mappa o marker non inizializzati');
+        return;
+    }
     
     const newPos = [latitude, longitude];
     
-    // Aggiorna SEMPRE il marker (mostra dove sei)
+    // AGGIORNA SEMPRE IL MARKER (questo non fa muovere la mappa)
     marker.setLatLng(newPos);
+    console.log(`📍 Marker aggiornato a: ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
     
-    // Centra la mappa SOLO se l'utente non ha MAI interagito
+    // Muovi la VISTA solo se l'utente NON ha mai interagito
     if (!userHasMovedMap) {
-        map.setView(newPos, 16, { 
-            animate: true,
-            duration: 0.5 
-        });
+        map.setView(newPos, 16, { animate: false }); // NO animazione per evitare conflitti
+        console.log('🗺️ Vista centrata automaticamente');
+    } else {
+        console.log('🔒 Vista bloccata (utente ha interagito)');
     }
     
     // Aggiorna status GPS
