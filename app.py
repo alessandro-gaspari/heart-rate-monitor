@@ -1,160 +1,170 @@
-import os
-import base64
-import json
-import sqlite3
-from datetime import datetime
 from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
+from flask_cors import CORS
+import sqlite3
+import base64
+import os
+from datetime import datetime
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'heart-rate-monitor-secret'
+app.config['SECRET_KEY'] = 'coospo_heart_rate_monitor_secret_2024'
+CORS(app)
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-def init_database():
-    conn = sqlite3.connect('heart_rate_data.db')
+# Connessione al database SQLite
+def get_db_connection():
+    conn = sqlite3.connect('heart_rate.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# Migrazione database per aggiungere colonne GPS
+def migrate_db():
+    """Aggiunge colonne GPS se non esistono"""
+    try:
+        conn = sqlite3.connect('heart_rate.db')
+        cursor = conn.cursor()
+        
+        # Controlla se le colonne esistono
+        cursor.execute("PRAGMA table_info(heart_rate_data)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if 'latitude' not in columns:
+            cursor.execute('ALTER TABLE heart_rate_data ADD COLUMN latitude REAL')
+            print('✅ Colonna latitude aggiunta')
+        
+        if 'longitude' not in columns:
+            cursor.execute('ALTER TABLE heart_rate_data ADD COLUMN longitude REAL')
+            print('✅ Colonna longitude aggiunta')
+        
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"⚠️ Errore migrazione: {e}")
+
+# Inizializza database
+def init_db():
+    conn = sqlite3.connect('heart_rate.db')
     cursor = conn.cursor()
+    
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS heart_rate (
+        CREATE TABLE IF NOT EXISTS heart_rate_data (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
+            device_id TEXT NOT NULL,
             heart_rate INTEGER NOT NULL,
-            device_id TEXT,
-            device_type TEXT
+            latitude REAL,
+            longitude REAL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS rr_intervals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT NOT NULL,
-            rr_interval REAL NOT NULL,
-            device_id TEXT,
-            device_type TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-    print("✅ Database inizializzato")
-
-def decode_heart_rate(device_type, data_bytes):
-    if device_type == 'heartRateBand':
-        if len(data_bytes) < 2:
-            return None, []
-        flags = data_bytes[0]
-        heart_rate_format = flags & 0x01
-        rr_interval_present = (flags >> 4) & 0x01
-        
-        if heart_rate_format == 0:
-            heart_rate = data_bytes[1]
-            offset = 2
-        else:
-            if len(data_bytes) < 3:
-                return None, []
-            heart_rate = int.from_bytes(data_bytes[1:3], 'little')
-            offset = 3
-        
-        rr_intervals = []
-        if rr_interval_present:
-            for i in range(offset, len(data_bytes), 2):
-                if i + 1 < len(data_bytes):
-                    rr_value = int.from_bytes(data_bytes[i:i+2], 'little')
-                    rr_ms = rr_value * 1000 / 1024
-                    rr_intervals.append(round(rr_ms, 2))
-        
-        return heart_rate, rr_intervals
-    
-    elif device_type == 'armband':
-        if len(data_bytes) >= 2:
-            heart_rate = data_bytes[1]
-            return heart_rate, []
-        return None, []
-    
-    else:
-        if len(data_bytes) < 2:
-            return None, []
-        flags = data_bytes[0]
-        heart_rate_format = flags & 0x01
-        
-        if heart_rate_format == 0:
-            heart_rate = data_bytes[1]
-        else:
-            if len(data_bytes) < 3:
-                return None, []
-            heart_rate = int.from_bytes(data_bytes[1:3], 'little')
-        
-        return heart_rate, []
-
-def save_to_database(heart_rate, rr_intervals, device_id="COOSPO", device_type="unknown"):
-    conn = sqlite3.connect('heart_rate_data.db')
-    cursor = conn.cursor()
-    timestamp = datetime.now().isoformat()
-    
-    if heart_rate:
-        cursor.execute(
-            'INSERT INTO heart_rate (timestamp, heart_rate, device_id, device_type) VALUES (?, ?, ?, ?)',
-            (timestamp, heart_rate, device_id, device_type)
-        )
-    
-    for rr in rr_intervals:
-        cursor.execute(
-            'INSERT INTO rr_intervals (timestamp, rr_interval, device_id, device_type) VALUES (?, ?, ?, ?)',
-            (timestamp, rr, device_id, device_type)
-        )
     
     conn.commit()
     conn.close()
+    print('✅ Database inizializzato')
 
-# Routes Flask
+# Decodifica Heart Rate dal dato BLE
+def decode_heart_rate(data):
+    try:
+        # Decodifica base64
+        raw_data = base64.b64decode(data.get('data', ''))
+        
+        if not raw_:
+            return 0
+        
+        # Heart Rate Measurement Characteristic (0x2A37)
+        flags = raw_data[0]
+        is_16bit = (flags & 0x01) != 0
+        
+        if is_16bit and len(raw_data) >= 3:
+            heart_rate = (raw_data[2] << 8) | raw_data[1]
+        elif len(raw_data) >= 2:
+            heart_rate = raw_data[1]
+        else:
+            heart_rate = 0
+        
+        return heart_rate
+    except Exception as e:
+        print(f"❌ Errore decodifica: {e}")
+        return 0
+
+# Route principale
 @app.route('/')
 def index():
     return render_template('dashboard.html')
 
-@app.route('/api/statistics')
-def get_statistics():
-    conn = sqlite3.connect('heart_rate_data.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT COUNT(*) as total, AVG(heart_rate) as avg, MIN(heart_rate) as min, MAX(heart_rate) as max FROM heart_rate')
-    stats = cursor.fetchone()
-    
-    cursor.execute('SELECT device_type, COUNT(*) as count FROM heart_rate GROUP BY device_type')
-    device_stats = cursor.fetchall()
-    
-    conn.close()
-    
-    return jsonify({
-        'total_samples': stats['total'] or 0,
-        'avg_hr': round(stats['avg'], 1) if stats['avg'] else 0,
-        'min_hr': stats['min'] or 0,
-        'max_hr': stats['max'] or 0,
-        'device_types': [{'type': row['device_type'], 'count': row['count']} for row in device_stats]
-    })
+# API endpoint per statistiche
+@app.route('/api/stats')
+def get_stats():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Calcola statistiche dell'ultima ora
+        cursor.execute('''
+            SELECT 
+                AVG(heart_rate) as avg_bpm,
+                MIN(heart_rate) as min_bpm,
+                MAX(heart_rate) as max_bpm,
+                COUNT(*) as total_samples
+            FROM heart_rate_data
+            WHERE timestamp > datetime('now', '-1 hour')
+        ''')
+        
+        stats = cursor.fetchone()
+        conn.close()
+        
+        return jsonify({
+            'avg_bpm': round(stats['avg_bpm']) if stats['avg_bpm'] else 0,
+            'min_bpm': stats['min_bpm'] if stats['min_bpm'] else 0,
+            'max_bpm': stats['max_bpm'] if stats['max_bpm'] else 0,
+            'total_samples': stats['total_samples']
+        })
+    except Exception as e:
+        print(f"❌ Errore stats: {e}")
+        return jsonify({
+            'avg_bpm': 0,
+            'min_bpm': 0,
+            'max_bpm': 0,
+            'total_samples': 0
+        })
 
-@app.route('/api/history/<int:minutes>')
-def get_history(minutes):
-    conn = sqlite3.connect('heart_rate_data.db')
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute('SELECT timestamp, heart_rate, device_type FROM heart_rate ORDER BY timestamp DESC LIMIT ?', (minutes * 12,))
-    data = [{'timestamp': row['timestamp'], 'heart_rate': row['heart_rate'], 'device_type': row['device_type']} for row in cursor.fetchall()]
-    
-    conn.close()
-    return jsonify(data)
+# API endpoint per dati recenti (ultimi 50)
+@app.route('/api/recent')
+def get_recent_data():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Ultimi 50 dati
+        cursor.execute('''
+            SELECT heart_rate, latitude, longitude, timestamp
+            FROM heart_rate_data
+            ORDER BY timestamp DESC
+            LIMIT 50
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        # Converti in lista di dict
+        data = []
+        for row in rows:
+            data.append({
+                'heart_rate': row['heart_rate'],
+                'latitude': row['latitude'],
+                'longitude': row['longitude'],
+                'timestamp': row['timestamp']
+            })
+        
+        # Inverti l'ordine (dal più vecchio al più recente per il grafico)
+        data.reverse()
+        
+        return jsonify(data)
+    except Exception as e:
+        print(f"❌ Errore recent  {e}")
+        return jsonify([])
 
-# SocketIO events
-@socketio.on('connect')
-def handle_connect():
-    print('✅ Client connesso')
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('⚠️  Client disconnesso')
-
-@socketio.on('dashboard')
-def handle_dashboard():
-    print('📊 Dashboard connessa')
-
+# Socket.IO: Ricevi dati dal device Flutter
 @socketio.on('heart_rate_data')
 def handle_heart_rate_data(data):
     try:
@@ -163,6 +173,9 @@ def handle_heart_rate_data(data):
         latitude = data.get('latitude')
         longitude = data.get('longitude')
         
+        print(f"📊 Ricevuto - Device: {device_id}, BPM: {heart_rate}, GPS: {latitude}, {longitude}")
+        
+        # Salva nel database
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -174,7 +187,7 @@ def handle_heart_rate_data(data):
         conn.commit()
         conn.close()
         
-        # Invia ai client web
+        # Invia ai client web connessi
         emit('new_heart_rate', {
             'device_id': device_id,
             'heart_rate': heart_rate,
@@ -183,15 +196,33 @@ def handle_heart_rate_data(data):
             'timestamp': datetime.now().isoformat()
         }, broadcast=True)
         
-        print(f"✅ BPM: {heart_rate}, GPS: {latitude}, {longitude}")
+        print(f"✅ Dati salvati e inviati ai client web")
         
     except Exception as e:
-        print(f"❌ Errore: {e}")
+        print(f"❌ Errore handle_heart_rate_ {e}")
 
+# Socket.IO: Connessione client
+@socketio.on('connect')
+def handle_connect():
+    print('✅ Client web connesso')
 
+# Socket.IO: Disconnessione client
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('⚠️ Client web disconnesso')
+
+# Avvia server
 if __name__ == '__main__':
-    init_database()
+    migrate_db()  # Migra database (aggiunge GPS se manca)
+    init_db()     # Inizializza database
+    
     port = int(os.environ.get('PORT', 10000))
-    print(f"🚀 Server avviato sulla porta {port}")
+    
+    print('=' * 60)
+    print('🚀 COOSPO Heart Rate Monitor Server')
+    print('=' * 60)
+    print(f'📡 Server in ascolto su porta {port}')
+    print('🌐 Dashboard disponibile su http://localhost:{}'.format(port))
+    print('=' * 60)
+    
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
-
