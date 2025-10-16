@@ -179,25 +179,35 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   // ========== ACTIVITY TRACKING ==========
   
   Future<void> _startActivity() async {
+    print("🚀 _startActivity() chiamato");
+    
     if (!isConnected) {
+      print("❌ Dispositivo non connesso");
       _showMessage('Connetti prima il dispositivo BLE');
       return;
     }
     
+    print("✅ Dispositivo connesso, mostro countdown...");
     await _showCountdown();
+    print("✅ Countdown completato");
     
     try {
-      print("🏃 Inizio attività...");
+      print("📡 Invio richiesta al server: $serverUrl/api/activity/start");
       
       final response = await http.post(
         Uri.parse('$serverUrl/api/activity/start'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'device_id': widget.device.platformName}),
-      );
+      ).timeout(const Duration(seconds: 10));
+      
+      print("📥 Risposta server: ${response.statusCode}");
+      print("📥 Body: ${response.body}");
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         currentActivityId = data['activity_id'];
+        
+        print("✅ Activity ID: $currentActivityId");
         
         setState(() {
           isActivityRunning = true;
@@ -207,13 +217,19 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           lastWaypointPosition = currentPosition;
         });
         
+        print("✅ State aggiornato: isActivityRunning = $isActivityRunning");
+        
+        // Timer waypoints
         waypointTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
           if (isActivityRunning && currentPosition != null) {
             _sendWaypoint();
           }
         });
         
-        Navigator.push(
+        print("🗺️ Navigating to ActivityScreen...");
+        
+        // NAVIGAZIONE
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => ActivityScreen(
@@ -225,13 +241,19 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           ),
         );
         
-        print("✅ Attività ${currentActivityId} iniziata");
+        print("✅ Ritorno da ActivityScreen");
+        
+      } else {
+        print("❌ Errore server: ${response.statusCode}");
+        _showMessage('Errore server: ${response.statusCode}');
       }
-    } catch (e) {
-      print("❌ Errore start activity: $e");
-      _showMessage('Errore avvio attività');
+    } catch (e, stackTrace) {
+      print("❌ ERRORE CRITICO start activity: $e");
+      print("Stack trace: $stackTrace");
+      _showMessage('Errore avvio attività: $e');
     }
   }
+
 
   Future<void> _showCountdown() async {
     return showDialog(
@@ -759,21 +781,53 @@ class _CountdownDialog extends StatefulWidget {
   __CountdownDialogState createState() => __CountdownDialogState();
 }
 
-class __CountdownDialogState extends State<_CountdownDialog> {
+class __CountdownDialogState extends State<_CountdownDialog> with SingleTickerProviderStateMixin {
   int countdown = 3;
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _opacityAnimation;
 
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.2).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+    );
+    
+    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    );
+    
     _startCountdown();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   void _startCountdown() async {
     for (int i = 3; i > 0; i--) {
+      if (mounted) {
+        setState(() => countdown = i);
+        _controller.forward(from: 0);
+      }
       await Future.delayed(const Duration(seconds: 1));
-      if (mounted) setState(() => countdown = i - 1);
     }
-    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // VIA!
+    if (mounted) {
+      setState(() => countdown = 0);
+      _controller.forward(from: 0);
+    }
+    
+    await Future.delayed(const Duration(milliseconds: 800));
     if (mounted) Navigator.pop(context);
   }
 
@@ -781,21 +835,69 @@ class __CountdownDialogState extends State<_CountdownDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.all(40),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: Colors.orange, width: 3),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (countdown > 0)
-              Text('$countdown', style: const TextStyle(color: Colors.white, fontSize: 120, fontWeight: FontWeight.bold))
-            else
-              const Text('VIA!', style: TextStyle(color: Colors.orange, fontSize: 80, fontWeight: FontWeight.bold)),
-          ],
+      child: ScaleTransition(
+        scale: _scaleAnimation,
+        child: FadeTransition(
+          opacity: _opacityAnimation,
+          child: Container(
+            width: 200,
+            height: 200,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: countdown > 0 
+                  ? [const Color(0xFFFF6B35), const Color(0xFFFF8C42)]
+                  : [const Color(0xFF00D084), const Color(0xFF00F5A0)],
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: countdown > 0 
+                    ? const Color(0xFFFF6B35).withOpacity(0.6)
+                    : const Color(0xFF00D084).withOpacity(0.6),
+                  blurRadius: 40,
+                  spreadRadius: 10,
+                ),
+              ],
+            ),
+            child: Center(
+              child: countdown > 0
+                ? Text(
+                    '$countdown',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 100,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'SF Pro Display',
+                      shadows: [
+                        Shadow(
+                          color: Colors.black38,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                  )
+                : const Text(
+                    'VIA!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 50,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 4,
+                      fontFamily: 'SF Pro Display',
+                      shadows: [
+                        Shadow(
+                          color: Colors.black38,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                  ),
+            ),
+          ),
         ),
       ),
     );
