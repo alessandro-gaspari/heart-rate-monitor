@@ -781,26 +781,27 @@ class _CountdownDialog extends StatefulWidget {
   __CountdownDialogState createState() => __CountdownDialogState();
 }
 
-class __CountdownDialogState extends State<_CountdownDialog> with SingleTickerProviderStateMixin {
+class __CountdownDialogState extends State<_CountdownDialog> 
+    with SingleTickerProviderStateMixin {
   int countdown = 3;
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _opacityAnimation;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
       vsync: this,
     );
     
-    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.2).animate(
+    _scaleAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
     
-    _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
     
     _startCountdown();
@@ -827,71 +828,69 @@ class __CountdownDialogState extends State<_CountdownDialog> with SingleTickerPr
       _controller.forward(from: 0);
     }
     
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future.delayed(const Duration(milliseconds: 700));
     if (mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: ScaleTransition(
-        scale: _scaleAnimation,
-        child: FadeTransition(
-          opacity: _opacityAnimation,
-          child: Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: countdown > 0 
-                  ? [const Color(0xFFFF6B35), const Color(0xFFFF8C42)]
-                  : [const Color(0xFF00D084), const Color(0xFF00F5A0)],
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: ScaleTransition(
+          scale: _scaleAnimation,
+          child: AnimatedBuilder(
+            animation: _pulseAnimation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _pulseAnimation.value,
+                child: child,
+              );
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: countdown > 0 
+                      ? const Color(0xFFFC5200).withOpacity(0.7)
+                      : const Color(0xFF00FF87).withOpacity(0.7),
+                    blurRadius: 100,
+                    spreadRadius: 30,
+                  ),
+                ],
               ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: countdown > 0 
-                    ? const Color(0xFFFF6B35).withOpacity(0.6)
-                    : const Color(0xFF00D084).withOpacity(0.6),
-                  blurRadius: 40,
-                  spreadRadius: 10,
-                ),
-              ],
-            ),
-            child: Center(
               child: countdown > 0
                 ? Text(
                     '$countdown',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 100,
+                    style: TextStyle(
+                      color: const Color(0xFFFC5200),
+                      fontSize: 200,
                       fontWeight: FontWeight.w900,
                       fontFamily: 'SF Pro Display',
+                      letterSpacing: -10,
                       shadows: [
                         Shadow(
-                          color: Colors.black38,
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
+                          color: Colors.black.withOpacity(0.5),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
                       ],
                     ),
                   )
                 : const Text(
-                    'VIA!',
+                    'GO!',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 50,
+                      color: Color(0xFF00FF87),
+                      fontSize: 120,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 4,
+                      letterSpacing: 20,
                       fontFamily: 'SF Pro Display',
                       shadows: [
                         Shadow(
                           color: Colors.black38,
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
+                          blurRadius: 20,
+                          offset: Offset(0, 10),
                         ),
                       ],
                     ),

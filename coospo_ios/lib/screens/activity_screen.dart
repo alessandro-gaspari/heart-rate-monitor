@@ -209,38 +209,55 @@ class _ActivityScreenState extends State<ActivityScreen> {
           
           // STOP BUTTON
           Positioned(
-            bottom: 40,
+            bottom: 50,
             left: 0,
             right: 0,
             child: Center(
               child: GestureDetector(
                 onTap: _stopActivity,
                 child: Container(
-                  width: 80,
-                  height: 80,
+                  width: 200,
+                  height: 60,
                   decoration: BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFFF1744), Color(0xFFD50000)],
+                    ),
+                    borderRadius: BorderRadius.circular(30),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.red.withOpacity(0.6),
-                        blurRadius: 20,
+                        color: const Color(0xFFFF1744).withOpacity(0.6),
+                        blurRadius: 30,
                         spreadRadius: 5,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.stop,
-                    color: Colors.white,
-                    size: 40,
-                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.stop_rounded, color: Colors.white, size: 32),
+                      SizedBox(width: 12),
+                      Text(
+                        'STOP',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                          fontFamily: 'SF Pro Display',
+                          ),
+                        ),
+                      ],
+                   ),
+                 ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );  
   }
 
   Widget _buildStat(String emoji, String value, String unit) {
