@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'activity_screen.dart';
+import 'activity_summary_screen.dart';
 
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
 
@@ -316,7 +317,20 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       if (response.statusCode == 200) {
         final stats = json.decode(response.body);
         setState(() => isActivityRunning = false);
-        _showActivitySummary(stats);
+        
+        print("✅ Attività terminata, navigando alla summary...");
+        
+        // NAVIGA ALLA SUMMARY SCREEN
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ActivitySummaryScreen(activityId: id),
+            ),
+          );
+        }
+      } else {
+        print("❌ Errore server: ${response.statusCode}");
       }
     } catch (e) {
       print("❌ Errore stop activity: $e");
