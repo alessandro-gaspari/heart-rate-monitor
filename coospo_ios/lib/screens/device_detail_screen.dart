@@ -6,6 +6,7 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:geolocator/geolocator.dart';
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'activity_screen.dart';
 
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
 
@@ -24,20 +25,15 @@ CoospoDeviceType getCoospoDeviceType(String deviceName) {
 
 Color getCoospoColor(CoospoDeviceType type) {
   switch (type) {
-    case CoospoDeviceType.heartRateBand:
-      return const Color(0xFFFF4444);
-    case CoospoDeviceType.armband:
-      return const Color(0xFFFF8C00);
-    case CoospoDeviceType.unknown:
-      return const Color(0xFF9B59B6);
-    default:
-      return const Color(0xFF3498DB);
+    case CoospoDeviceType.heartRateBand: return const Color(0xFFFF4444);
+    case CoospoDeviceType.armband: return const Color(0xFFFF8C00);
+    case CoospoDeviceType.unknown: return const Color(0xFF9B59B6);
+    default: return const Color(0xFF3498DB);
   }
 }
 
 class DeviceDetailScreen extends StatefulWidget {
   final BluetoothDevice device;
-
   const DeviceDetailScreen({Key? key, required this.device}) : super(key: key);
 
   @override
@@ -64,6 +60,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   int waypointCount = 0;
   DateTime? activityStartTime;
   
+  // Streams for activity screen
+  final StreamController<int> _heartRateStreamController = StreamController<int>.broadcast();
+  final StreamController<LatLng> _positionStreamController = StreamController<LatLng>.broadcast();
+  
   // Subscriptions & Controllers
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
   StreamSubscription<List<int>>? _characteristicSubscription;
@@ -86,18 +86,18 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     super.initState();
     deviceType = getCoospoDeviceType(widget.device.platformName);
     deviceColor = getCoospoColor(deviceType);
-
     _heartbeatController = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
-
     _listenToDeviceState();
     _startTracking();
   }
 
   @override
   void dispose() {
+    _heartRateStreamController.close();
+    _positionStreamController.close();
     _rssiTimer?.cancel();
     _heartbeatController.dispose();
     _stopBleReading();
@@ -108,42 +108,30 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     waypointTimer?.cancel();
     super.dispose();
   }
+
   // ========== GPS TRACKING ==========
   
   void _startTracking() async {
     print("🌍 Inizio tracking GPS...");
-    
-    if (mounted) {
-      setState(() => currentPosition = const LatLng(45.4642, 9.19));
-    }
+    if (mounted) setState(() => currentPosition = const LatLng(45.4642, 9.19));
     
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled().timeout(
-        const Duration(seconds: 2),
-        onTimeout: () => false,
+        const Duration(seconds: 2), onTimeout: () => false,
       );
-      
-      if (!serviceEnabled) {
-        print("⚠️ GPS non attivo");
-        return;
-      }
+      if (!serviceEnabled) return;
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      
-      if (permission == LocationPermission.denied || 
-          permission == LocationPermission.deniedForever) {
-        print("❌ Permessi GPS negati");
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
         return;
       }
 
       Position pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best
       ).timeout(const Duration(seconds: 5));
-      
-      print("✅ Posizione GPS: ${pos.latitude}, ${pos.longitude}");
       
       if (mounted) {
         setState(() => currentPosition = LatLng(pos.latitude, pos.longitude));
@@ -155,44 +143,36 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           distanceFilter: 1,
         )).listen((Position p) {
         if (mounted) {
-          setState(() => currentPosition = LatLng(p.latitude, p.longitude));
+          final pos = LatLng(p.latitude, p.longitude);
+          setState(() => currentPosition = pos);
+          _positionStreamController.add(pos);
         }
       });
       
-      print("✅ GPS tracking attivo");
     } catch (e) {
       print("❌ Errore GPS: $e");
     }
   }
 
   Future<void> _refreshGPS() async {
-    print("🔄 Refresh GPS manuale...");
     try {
       Position pos = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best
       ).timeout(const Duration(seconds: 5));
       
       final newPosition = LatLng(pos.latitude, pos.longitude);
-      
-      if (mounted) {
-        setState(() => currentPosition = newPosition);
-      }
+      if (mounted) setState(() => currentPosition = newPosition);
       
       if (mapController != null) {
         mapController!.animateCamera(
           CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: newPosition,
-              zoom: 17.0,
-            ),
+            CameraPosition(target: newPosition, zoom: 17.0),
           ),
         );
       }
-      
-      _showMessage('Posizione aggiornata', false);
+      _showMessage('Posizione aggiornata');
     } catch (e) {
-      print("❌ Errore refresh GPS: $e");
-      _showMessage('Errore aggiornamento GPS', true);
+      _showMessage('Errore aggiornamento GPS');
     }
   }
 
@@ -200,9 +180,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   
   Future<void> _startActivity() async {
     if (!isConnected) {
-      _showMessage('Connetti prima il dispositivo BLE', true);
+      _showMessage('Connetti prima il dispositivo BLE');
       return;
     }
+    
+    await _showCountdown();
     
     try {
       print("🏃 Inizio attività...");
@@ -231,13 +213,32 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           }
         });
         
-        _showMessage('Attività iniziata! 🏃', false);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ActivityScreen(
+              activityId: currentActivityId!,
+              onStopActivity: _stopActivity,
+              heartRateStream: _heartRateStreamController.stream,
+              positionStream: _positionStreamController.stream,
+            ),
+          ),
+        );
+        
         print("✅ Attività ${currentActivityId} iniziata");
       }
     } catch (e) {
       print("❌ Errore start activity: $e");
-      _showMessage('Errore avvio attività', true);
+      _showMessage('Errore avvio attività');
     }
+  }
+
+  Future<void> _showCountdown() async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _CountdownDialog(),
+    );
   }
 
   Future<void> _sendWaypoint() async {
@@ -251,7 +252,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           currentPosition!.latitude,
           currentPosition!.longitude,
         );
-        
         setState(() {
           totalDistance += distance / 1000;
           waypointCount++;
@@ -276,46 +276,38 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     }
   }
 
-  Future<void> _stopActivity() async {
-    if (currentActivityId == null) return;
+  Future<void> _stopActivity([int? activityId]) async {
+    final id = activityId ?? currentActivityId;
+    if (id == null) return;
     
     try {
       print("🛑 Arresto attività...");
-      
       waypointTimer?.cancel();
       
       final response = await http.post(
         Uri.parse('$serverUrl/api/activity/stop'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'activity_id': currentActivityId}),
+        body: json.encode({'activity_id': id}),
       );
       
       if (response.statusCode == 200) {
         final stats = json.decode(response.body);
-        
-        setState(() {
-          isActivityRunning = false;
-        });
-        
+        setState(() => isActivityRunning = false);
         _showActivitySummary(stats);
-        
-        print("✅ Attività terminata");
       }
     } catch (e) {
       print("❌ Errore stop activity: $e");
-      _showMessage('Errore arresto attività', true);
     }
   }
+
 
   void _showActivitySummary(Map<String, dynamic> stats) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text(
-          '🎉 Attività Completata!',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('🎉 Attività Completata!', 
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -344,32 +336,16 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: const TextStyle(color: Colors.white70)),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
+          Text(value, style: const TextStyle(
+            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
         ],
       ),
     );
   }
-
-  String _getActivityDuration() {
-    if (activityStartTime == null) return '00:00';
-    final duration = DateTime.now().difference(activityStartTime!);
-    final minutes = duration.inMinutes.toString().padLeft(2, '0');
-    final seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
   // ========== BLE CONNECTION & STREAMING ==========
   
   void _triggerHeartbeat() {
-    _heartbeatController.forward().then((_) {
-      _heartbeatController.reverse();
-    });
+    _heartbeatController.forward().then((_) => _heartbeatController.reverse());
   }
 
   void _listenToDeviceState() {
@@ -382,13 +358,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
             currentHeartRate = 0;
           });
         }
-        _showMessage('Dispositivo disconnesso', true);
       } else if (state == BluetoothConnectionState.connected) {
-        if (mounted) {
-          setState(() {
-            isConnected = true;
-          });
-        }
+        if (mounted) setState(() => isConnected = true);
         _startRssiMonitoring();
       }
     });
@@ -396,19 +367,13 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
 
   void _startRssiMonitoring() {
     _rssiTimer?.cancel();
-    
     _rssiTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       if (!mounted || !isConnected) {
         timer.cancel();
         return;
       }
-      
       widget.device.readRssi().then((rssi) {
-        if (mounted) {
-          setState(() {
-            signalStrength = rssi;
-          });
-        }
+        if (mounted) setState(() => signalStrength = rssi);
       }).catchError((e) {});
     });
   }
@@ -428,36 +393,23 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   Future<void> _connectToDevice() async {
     try {
       await widget.device.connect();
-      setState(() {
-        isConnected = true;
-      });
-      _showMessage('Connesso ✅', false);
-      
+      setState(() => isConnected = true);
       await _startBleReading();
     } catch (e) {
-      _showMessage('Errore connessione: $e', true);
-      setState(() {
-        isConnected = false;
-      });
+      setState(() => isConnected = false);
     }
   }
 
   Future<void> _disconnect() async {
     print('🔴 DISCONNESSIONE');
-    
-    if (isActivityRunning) {
-      await _stopActivity();
+    if (isActivityRunning && currentActivityId != null) {
+      await _stopActivity(currentActivityId!);
     }
-    
-    if (isStreaming) {
-      await _stopStreaming();
-    }
+    if (isStreaming) await _stopStreaming();
     
     await _characteristicSubscription?.cancel();
     _characteristicSubscription = null;
-    
     _rssiTimer?.cancel();
-    _rssiTimer = null;
     
     setState(() {
       isConnected = false;
@@ -467,61 +419,43 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     
     try {
       await widget.device.disconnect();
-      print('✅ Disconnesso');
     } catch (e) {
       print('❌ Errore disconnect: $e');
     }
-    
-    _showMessage('Disconnesso', false);
   }
 
   Future<void> _startBleReading() async {
-    print('=== INIZIO LETTURA BLE ===');
-
     try {
       List<BluetoothService> services = await widget.device.discoverServices();
-      
       final Guid characteristicUuid = Guid("00002a37-0000-1000-8000-00805f9b34fb");
       
       BluetoothCharacteristic? characteristic;
       for (var service in services) {
         try {
-          characteristic = service.characteristics.firstWhere(
-            (c) => c.uuid == characteristicUuid,
-          );
+          characteristic = service.characteristics.firstWhere((c) => c.uuid == characteristicUuid);
           break;
         } catch (_) {}
       }
 
-      if (characteristic == null) {
-        _showMessage('Caratteristica non trovata', true);
-        return;
-      }
-
+      if (characteristic == null) return;
       await characteristic.setNotifyValue(true);
 
       _characteristicSubscription = characteristic.value.listen((data) {
         if (data.isEmpty) return;
-        
         int hr = _decodeData(data);
         
         if (hr > 0) {
-          setState(() {
-            currentHeartRate = hr;
-          });
+          setState(() => currentHeartRate = hr);
           _triggerHeartbeat();
+          _heartRateStreamController.add(hr);
           
           if (isStreaming && _socket != null && _socket!.connected) {
             _sendToServer(data);
           }
         }
       });
-      
-      print('✅ Lettura BLE attiva');
-      
     } catch (e) {
       print('❌ ERRORE BLE: $e');
-      _showMessage('Errore BLE: $e', true);
     }
   }
 
@@ -531,12 +465,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
   Future<void> _startStreaming() async {
-    if (!isConnected) {
-      _showMessage('Connetti prima il dispositivo', true);
-      return;
-    }
-
-    print('=== INIZIO STREAMING ===');
+    if (!isConnected) return;
     setState(() => isStreaming = true);
 
     try {
@@ -544,20 +473,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         'transports': ['websocket'],
         'autoConnect': false,
       });
-      
       _socket?.connect();
-      
-      _socket?.onConnect((_) {
-        print('✅ Socket.IO connesso');
-        _showMessage('Streaming avviato 📡', false);
-      });
-      
+      _socket?.onConnect((_) => print('✅ Socket.IO connesso'));
       _socket?.onDisconnect((_) => print('⚠️ Socket disconnesso'));
       _socket?.onError((error) => print('❌ Errore Socket.IO: $error'));
-      
     } catch (e) {
       print('❌ ERRORE STREAMING: $e');
-      _showMessage('Errore streaming: $e', true);
       await _stopStreaming();
     }
   }
@@ -580,9 +501,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
   Future<void> _stopStreaming() async {
-    print('=== FINE STREAMING ===');
     setState(() => isStreaming = false);
-    
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
@@ -600,15 +519,20 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     return 0;
   }
 
-  void _showMessage(String message, bool isError) {
+  void _showMessage(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
         duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
       ),
     );
   }
+
+  // ========== UI BUILD ==========
+
   @override
   Widget build(BuildContext context) {
     final signalColor = _getSignalColor();
@@ -621,11 +545,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         elevation: 0,
         title: Text(
           widget.device.platformName.isEmpty ? 'Dispositivo' : widget.device.platformName,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         actions: [
@@ -642,14 +562,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                 children: [
                   Icon(signalIcon, color: signalColor, size: 18),
                   const SizedBox(width: 6),
-                  Text(
-                    '${signalStrength} dBm',
-                    style: TextStyle(
-                      color: signalColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  Text('${signalStrength} dBm',
+                    style: TextStyle(color: signalColor, fontSize: 11, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -660,7 +574,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         children: [
           Column(
             children: [
-              // MAPPA CON OVERLAY STATS
+              // MAPPA
               Stack(
                 children: [
                   AnimatedContainer(
@@ -670,13 +584,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                     margin: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: deviceColor.withOpacity(0.3),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                        )
-                      ],
+                      boxShadow: [BoxShadow(color: deviceColor.withOpacity(0.3), blurRadius: 10, spreadRadius: 2)],
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
@@ -692,8 +600,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       ),
                     ),
                   ),
-                  
-                  // Bottone refresh GPS
                   Positioned(
                     top: 30,
                     right: 30,
@@ -701,13 +607,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       decoration: BoxDecoration(
                         color: deviceColor,
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: deviceColor.withOpacity(0.6),
-                            blurRadius: 12,
-                            spreadRadius: 2,
-                          )
-                        ],
+                        boxShadow: [BoxShadow(color: deviceColor.withOpacity(0.6), blurRadius: 12, spreadRadius: 2)],
                       ),
                       child: IconButton(
                         icon: const Icon(Icons.my_location, color: Colors.white),
@@ -716,34 +616,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       ),
                     ),
                   ),
-                  
-                  // OVERLAY STATS ATTIVITÀ
-                  if (isActivityRunning)
-                    Positioned(
-                      bottom: 10,
-                      left: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.black87,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: deviceColor, width: 2),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildActivityStat('⏱️', _getActivityDuration()),
-                            _buildActivityStat('📍', '${totalDistance.toStringAsFixed(2)} km'),
-                            _buildActivityStat('❤️', '$currentHeartRate bpm'),
-                          ],
-                        ),
-                      ),
-                    ),
                 ],
               ),
               
-              // Pulsante espandi/comprimi
+              // Espandi/Comprimi
               InkWell(
                 onTap: () => setState(() => isMapExpanded = !isMapExpanded),
                 child: Padding(
@@ -751,19 +627,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(
-                        isMapExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                        color: Colors.white54,
-                        size: 28,
-                      ),
+                      Icon(isMapExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                        color: Colors.white54, size: 28),
                       const SizedBox(width: 8),
-                      Text(
-                        isMapExpanded ? 'Comprimi' : 'Espandi',
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 14,
-                        ),
-                      ),
+                      Text(isMapExpanded ? 'Comprimi' : 'Espandi',
+                        style: const TextStyle(color: Colors.white54, fontSize: 14)),
                     ],
                   ),
                 ),
@@ -778,106 +646,50 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         children: [
-                          // Heart icon con animazione
                           ScaleTransition(
                             scale: Tween<double>(begin: 1.0, end: 1.2).animate(
-                              CurvedAnimation(
-                                parent: _heartbeatController,
-                                curve: Curves.easeOut,
-                              ),
-                            ),
+                              CurvedAnimation(parent: _heartbeatController, curve: Curves.easeOut)),
                             child: Container(
                               width: 120,
                               height: 120,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: deviceColor.withOpacity(0.4),
-                                    blurRadius: 30,
-                                    spreadRadius: 5,
-                                  ),
-                                ],
+                                boxShadow: [BoxShadow(color: deviceColor.withOpacity(0.4), blurRadius: 30, spreadRadius: 5)],
                               ),
-                              child: const Center(
-                                child: Text(
-                                  '❤️',
-                                  style: TextStyle(fontSize: 60),
-                                ),
-                              ),
+                              child: const Center(child: Text('❤️', style: TextStyle(fontSize: 60))),
                             ),
                           ),
                           const SizedBox(height: 20),
-                          
-                          // BPM Display
-                          Text(
-                            currentHeartRate > 0 ? '$currentHeartRate' : '--',
-                            style: TextStyle(
-                              fontSize: 70,
-                              fontWeight: FontWeight.w900,
-                              color: deviceColor,
-                            ),
-                          ),
-                          Text(
-                            'BPM',
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: deviceColor.withOpacity(0.7),
-                              letterSpacing: 6,
-                            ),
-                          ),
+                          Text(currentHeartRate > 0 ? '$currentHeartRate' : '--',
+                            style: TextStyle(fontSize: 70, fontWeight: FontWeight.w900, color: deviceColor)),
+                          Text('BPM', style: TextStyle(fontSize: 20, color: deviceColor.withOpacity(0.7), letterSpacing: 6)),
                           const SizedBox(height: 30),
                           
-                          // BOTTONI
                           if (!isConnected)
-                            _buildButton(
-                              label: 'CONNETTI',
-                              icon: Icons.bluetooth_connected,
-                              color: deviceColor,
-                              onPressed: _connectToDevice,
-                            ),
+                            _buildButton(label: 'CONNETTI', icon: Icons.bluetooth_connected, 
+                              color: deviceColor, onPressed: _connectToDevice),
                           
                           if (isConnected) ...[
-                            // START/STOP ACTIVITY
-                            _buildButton(
-                              label: isActivityRunning ? 'STOP ATTIVITÀ' : 'START ATTIVITÀ',
-                              icon: isActivityRunning ? Icons.stop : Icons.play_arrow,
-                              color: isActivityRunning ? Colors.orange : Colors.green,
-                              onPressed: isActivityRunning ? _stopActivity : _startActivity,
-                              size: 18,
-                            ),
+                            _buildButton(label: 'START ATTIVITÀ', icon: Icons.play_arrow,
+                              color: Colors.green, onPressed: _startActivity, size: 18),
                             const SizedBox(height: 12),
-                            
-                            // STREAMING
-                            _buildButton(
-                              label: isStreaming ? 'STOP STREAM' : 'START STREAM',
+                            _buildButton(label: isStreaming ? 'STOP STREAM' : 'START STREAM',
                               icon: isStreaming ? Icons.stop_circle : Icons.cloud_upload,
                               color: isStreaming ? Colors.red : deviceColor,
-                              onPressed: isStreaming ? _stopStreaming : _startStreaming,
-                            ),
+                              onPressed: isStreaming ? _stopStreaming : _startStreaming),
                             const SizedBox(height: 12),
-                            
-                            // DISCONNECT
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
                                 onPressed: _disconnect,
                                 icon: const Icon(Icons.bluetooth_disabled, size: 22),
-                                label: const Text(
-                                  'DISCONNETTI',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 2,
-                                  ),
-                                ),
+                                label: const Text('DISCONNETTI',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 2)),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.red,
                                   side: const BorderSide(color: Colors.red, width: 2),
                                   padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16)
-                                  ),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 ),
                               ),
                             ),
@@ -890,8 +702,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
             ],
           ),
           
-          // Mini widget BPM quando mappa espansa
-          if (isMapExpanded && !isActivityRunning)
+          if (isMapExpanded)
             Positioned(
               bottom: 30,
               right: 20,
@@ -900,51 +711,21 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                   color: Colors.black87,
                   borderRadius: BorderRadius.circular(50),
                   border: Border.all(color: deviceColor, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: deviceColor.withOpacity(0.6),
-                      blurRadius: 15,
-                      spreadRadius: 3,
-                    )
-                  ],
+                  boxShadow: [BoxShadow(color: deviceColor.withOpacity(0.6), blurRadius: 15, spreadRadius: 3)],
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 child: Row(
                   children: [
                     Icon(Icons.favorite, color: deviceColor, size: 20),
                     const SizedBox(width: 8),
-                    Text(
-                      currentHeartRate > 0 ? '$currentHeartRate BPM' : '-- BPM',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text(currentHeartRate > 0 ? '$currentHeartRate BPM' : '-- BPM',
+                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
             ),
         ],
       ),
-    );
-  }
-
-  // Helper widgets
-  Widget _buildActivityStat(String emoji, String value) {
-    return Column(
-      children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
     );
   }
 
@@ -960,20 +741,61 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       child: ElevatedButton.icon(
         onPressed: onPressed,
         icon: Icon(icon, size: 24),
-        label: Text(
-          label,
-          style: TextStyle(
-            fontSize: size,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 2,
-          ),
-        ),
+        label: Text(label, style: TextStyle(fontSize: size, fontWeight: FontWeight.bold, letterSpacing: 2)),
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      ),
+    );
+  }
+}
+
+// ========== COUNTDOWN DIALOG ==========
+
+class _CountdownDialog extends StatefulWidget {
+  @override
+  __CountdownDialogState createState() => __CountdownDialogState();
+}
+
+class __CountdownDialogState extends State<_CountdownDialog> {
+  int countdown = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  void _startCountdown() async {
+    for (int i = 3; i > 0; i--) {
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) setState(() => countdown = i - 1);
+    }
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(40),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: Colors.orange, width: 3),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (countdown > 0)
+              Text('$countdown', style: const TextStyle(color: Colors.white, fontSize: 120, fontWeight: FontWeight.bold))
+            else
+              const Text('VIA!', style: TextStyle(color: Colors.orange, fontSize: 80, fontWeight: FontWeight.bold)),
+          ],
         ),
       ),
     );
