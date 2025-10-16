@@ -55,47 +55,51 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void _startListening() {
     // Listen heart rate
     hrSubscription = widget.heartRateStream.listen((hr) {
-      setState(() {
-        currentHeartRate = hr;
-      });
+      if (mounted) {
+        setState(() {
+          currentHeartRate = hr;
+        });
+      }
     });
 
     // Listen position
     posSubscription = widget.positionStream.listen((pos) {
-      setState(() {
-        routePoints.add(pos);
-        
-        // Calcola distanza incrementale
-        if (lastPosition != null) {
-          final distance = Geolocator.distanceBetween(
-            lastPosition!.latitude,
-            lastPosition!.longitude,
-            pos.latitude,
-            pos.longitude,
-          );
-          totalDistance += distance / 1000; // km
+      if (mounted) {
+        setState(() {
+          routePoints.add(pos);
           
-          // Calcola velocità media (min/km)
-          final elapsed = DateTime.now().difference(startTime).inMinutes;
-          if (totalDistance > 0 && elapsed > 0) {
-            avgSpeed = elapsed / totalDistance;
+          // Calcola distanza incrementale
+          if (lastPosition != null) {
+            final distance = Geolocator.distanceBetween(
+              lastPosition!.latitude,
+              lastPosition!.longitude,
+              pos.latitude,
+              pos.longitude,
+            );
+            totalDistance += distance / 1000; // km
+            
+            // Calcola velocità media (min/km)
+            final elapsed = DateTime.now().difference(startTime).inMinutes;
+            if (totalDistance > 0 && elapsed > 0) {
+              avgSpeed = elapsed / totalDistance;
+            }
+            
+            // Calorie approssimative
+            calories = (totalDistance * 70).round();
           }
           
-          // Calorie approssimative
-          calories = (totalDistance * 70).round();
-        }
-        
-        lastPosition = pos;
-        
-        // Centra mappa sulla posizione
-        if (mapController != null) {
-          mapController!.animateCamera(
-            CameraUpdate.newCameraPosition(
-              CameraPosition(target: pos, zoom: 17),
-            ),
-          );
-        }
-      });
+          lastPosition = pos;
+          
+          // Centra mappa sulla posizione
+          if (mapController != null && routePoints.length % 5 == 0) {
+            mapController!.animateCamera(
+              CameraUpdate.newCameraPosition(
+                CameraPosition(target: pos, zoom: 17),
+              ),
+            );
+          }
+        });
+      }
     });
   }
 
@@ -110,31 +114,91 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void _stopActivity() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text(
-          '⏸️ Fermare attività?',
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          'Vuoi terminare questa attività?',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annulla'),
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(30),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E293B),
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.5),
+                blurRadius: 30,
+                spreadRadius: 5,
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              widget.onStopActivity(widget.activityId);
-              Navigator.pop(context); // Torna alla schermata precedente
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Stop'),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.pause_circle_outline, color: Colors.orange, size: 60),
+              const SizedBox(height: 20),
+              const Text(
+                'VUOI FERMARE\nL\'ATTIVITÀ?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'SF Pro Display',
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 30),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF1744),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      child: const Text(
+                        'NO',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context); // Chiudi dialog
+                        widget.onStopActivity(widget.activityId);
+                        Navigator.pop(context); // Chiudi ActivityScreen
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00C853),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      child: const Text(
+                        'SÌ',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -177,6 +241,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: Colors.orange, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.3),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
               child: Column(
                 children: [
@@ -185,9 +256,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     _formatDuration(),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace',
+                      fontSize: 40,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: 'SF Pro Display',
+                      letterSpacing: -2,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -247,37 +319,44 @@ class _ActivityScreenState extends State<ActivityScreen> {
                           fontWeight: FontWeight.w900,
                           letterSpacing: 4,
                           fontFamily: 'SF Pro Display',
-                          ),
                         ),
-                      ],
-                   ),
-                 ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
-      );  
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildStat(String emoji, String value, String unit) {
     return Column(
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 4),
+        Text(
+          emoji,
+          style: const TextStyle(fontSize: 24),
+        ),
+        const SizedBox(height: 6),
         Text(
           value,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            fontFamily: 'SF Pro Display',
+            letterSpacing: -0.5,
           ),
         ),
         Text(
           unit,
           style: const TextStyle(
-            color: Colors.white54,
+            color: Colors.white60,
             fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1,
           ),
         ),
       ],

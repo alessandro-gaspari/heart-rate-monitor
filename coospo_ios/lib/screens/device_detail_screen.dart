@@ -139,8 +139,9 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
 
       positionStream = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best,
-          distanceFilter: 1,
+          accuracy: LocationAccuracy.bestForNavigation,
+          distanceFilter: 0,
+          timeLimit: Duration(milliseconds: 500),
         )).listen((Position p) {
         if (mounted) {
           final pos = LatLng(p.latitude, p.longitude);
