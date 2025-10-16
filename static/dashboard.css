@@ -97,7 +97,7 @@ body {
     width: 36px;
     height: 36px;
     color: var(--accent-cyan);
-    animation: pulse 2s ease-in-out infinite;
+    animation: none !important;
 }
 
 @keyframes pulse {
@@ -238,9 +238,16 @@ body {
 }
 
 .heart-animation {
-    font-size: 64px;
-    margin-bottom: 0.5rem;
-    filter: drop-shadow(0 0 15px var(--glow-red));
+    font-size: 80px;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 0 20px var(--glow-red));
+    animation: heartbeat 1.2s ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    10% { transform: scale(1.15); }
+    20% { transform: scale(1); }
 }
 
 .bpm-number {
