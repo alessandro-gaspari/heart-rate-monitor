@@ -238,16 +238,9 @@ body {
 }
 
 .heart-animation {
-    font-size: 80px;
-    margin-bottom: 1rem;
-    filter: drop-shadow(0 0 20px var(--glow-red));
-    animation: heartbeat 1.2s ease-in-out infinite;
-}
-
-@keyframes heartbeat {
-    0%, 100% { transform: scale(1); }
-    10% { transform: scale(1.15); }
-    20% { transform: scale(1); }
+    font-size: 64px;
+    margin-bottom: 0.5rem;
+    filter: drop-shadow(0 0 15px var(--glow-red));
 }
 
 .bpm-number {
@@ -490,8 +483,7 @@ body {
 }
 
 .leaflet-control-attribution {
-    background: rgba(15, 23, 42, 0.8) !important;
-    color: var(--text-gray) !important;
+    display: none !important;
 }
 
 /* Custom Marker Animation */
