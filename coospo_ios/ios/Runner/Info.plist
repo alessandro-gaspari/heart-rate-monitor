@@ -66,6 +66,10 @@
 	<string>Questa app usa il GPS per mostrare la qualità del segnale</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>L'app necessita dell'accesso Bluetooth per comunicare con i sensori cardiaci Coospo</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>L'app utilizza la posizione per mostrare la tua mappa in tempo reale.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>L'app utilizza la posizione per mostrare la tua mappa in tempo reale.</string>
 
 </dict>
 </plist>

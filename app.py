@@ -4,6 +4,7 @@ from flask_cors import CORS
 import sqlite3
 import base64
 import os
+from flask import Flask, render_template, jsonify, request 
 from datetime import datetime
 
 app = Flask(__name__)
@@ -95,6 +96,8 @@ def decode_heart_rate(data):
         print(f"❌ Errore decodifica heart rate: {e}")
         print(f"   Dati ricevuti: {data}")
         return 0
+    
+
 
 # Route principale
 @app.route('/')
@@ -228,6 +231,271 @@ def handle_disconnect():
 # Inizializza database all'avvio
 migrate_db()
 init_db()
+init_activities_db()
+
+def init_activities_db():
+    """Crea tabelle per attività e waypoints"""
+    conn = sqlite3.connect('heart_rate.db')
+    cursor = conn.cursor()
+    
+    # Tabella attività
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS activities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id TEXT NOT NULL,
+            start_time DATETIME NOT NULL,
+            end_time DATETIME,
+            distance_km REAL DEFAULT 0,
+            avg_speed REAL DEFAULT 0,
+            avg_heart_rate INTEGER DEFAULT 0,
+            calories REAL DEFAULT 0,
+            status TEXT DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Tabella waypoints (punti GPS del percorso)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS waypoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            activity_id INTEGER NOT NULL,
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            heart_rate INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (activity_id) REFERENCES activities (id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    print('✅ Database attività inizializzato')
+
+# API: Inizia nuova attività
+@app.route('/api/activity/start', methods=['POST'])
+def start_activity():
+    try:
+        data = request.json
+        device_id = data.get('device_id', 'unknown')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO activities (device_id, start_time, status)
+            VALUES (?, datetime('now'), 'active')
+        ''', (device_id,))
+        
+        activity_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Attività {activity_id} iniziata per {device_id}")
+        
+        return jsonify({
+            'success': True,
+            'activity_id': activity_id
+        })
+        
+    except Exception as e:
+        print(f"❌ Errore start activity: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# API: Aggiungi waypoint
+@app.route('/api/activity/waypoint', methods=['POST'])
+def add_waypoint():
+    try:
+        data = request.json
+        activity_id = data.get('activity_id')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        heart_rate = data.get('heart_rate', 0)
+        
+        if not activity_id or not latitude or not longitude:
+            return jsonify({'success': False, 'error': 'Missing data'}), 400
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO waypoints (activity_id, latitude, longitude, heart_rate)
+            VALUES (?, ?, ?, ?)
+        ''', (activity_id, latitude, longitude, heart_rate))
+        
+        conn.commit()
+        conn.close()
+        
+        # Broadcast waypoint ai client web
+        socketio.emit('new_waypoint', {
+            'activity_id': activity_id,
+            'latitude': latitude,
+            'longitude': longitude,
+            'heart_rate': heart_rate
+        }, broadcast=True)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        print(f"❌ Errore waypoint: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# API: Termina attività e calcola statistiche
+@app.route('/api/activity/stop', methods=['POST'])
+def stop_activity():
+    try:
+        data = request.json
+        activity_id = data.get('activity_id')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Calcola distanza totale
+        cursor.execute('''
+            SELECT latitude, longitude FROM waypoints
+            WHERE activity_id = ?
+            ORDER BY timestamp ASC
+        ''', (activity_id,))
+        
+        waypoints = cursor.fetchall()
+        distance_km = calculate_distance(waypoints)
+        
+        # Calcola statistiche
+        cursor.execute('''
+            SELECT AVG(heart_rate), COUNT(*)
+            FROM waypoints
+            WHERE activity_id = ? AND heart_rate > 0
+        ''', (activity_id,))
+        
+        stats = cursor.fetchone()
+        avg_hr = round(stats[0]) if stats[0] else 0
+        
+        # Durata in minuti
+        cursor.execute('''
+            SELECT 
+                (julianday(datetime('now')) - julianday(start_time)) * 24 * 60 as duration_minutes
+            FROM activities
+            WHERE id = ?
+        ''', (activity_id,))
+        
+        duration_minutes = cursor.fetchone()[0]
+        
+        # Velocità media (min/km)
+        avg_speed = (duration_minutes / distance_km) if distance_km > 0 else 0
+        
+        # Calorie (formula approssimativa: 1 kcal per kg per km)
+        # Assumiamo 70kg di peso medio
+        calories = distance_km * 70
+        
+        # Aggiorna attività
+        cursor.execute('''
+            UPDATE activities
+            SET end_time = datetime('now'),
+                distance_km = ?,
+                avg_speed = ?,
+                avg_heart_rate = ?,
+                calories = ?,
+                status = 'completed'
+            WHERE id = ?
+        ''', (distance_km, avg_speed, avg_hr, calories, activity_id))
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Attività {activity_id} terminata: {distance_km:.2f}km, {avg_hr}bpm")
+        
+        return jsonify({
+            'success': True,
+            'distance_km': round(distance_km, 2),
+            'avg_speed': round(avg_speed, 2),
+            'avg_heart_rate': avg_hr,
+            'calories': round(calories, 0),
+            'duration_minutes': round(duration_minutes, 2)
+        })
+        
+    except Exception as e:
+        print(f"❌ Errore stop activity: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# Funzione helper: calcola distanza tra waypoints (formula Haversine)
+def calculate_distance(waypoints):
+    """Calcola distanza totale in km tra waypoints"""
+    from math import radians, sin, cos, sqrt, atan2
+    
+    if len(waypoints) < 2:
+        return 0.0
+    
+    total_distance = 0.0
+    
+    for i in range(len(waypoints) - 1):
+        lat1, lon1 = waypoints[i]
+        lat2, lon2 = waypoints[i + 1]
+        
+        # Formula Haversine
+        R = 6371  # Raggio Terra in km
+        
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1-a))
+        
+        distance = R * c
+        total_distance += distance
+    
+    return total_distance
+
+# API: Ottieni attività con waypoints
+@app.route('/api/activity/<int:activity_id>')
+def get_activity(activity_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Info attività
+        cursor.execute('''
+            SELECT * FROM activities WHERE id = ?
+        ''', (activity_id,))
+        
+        activity = cursor.fetchone()
+        
+        if not activity:
+            return jsonify({'error': 'Activity not found'}), 404
+        
+        # Waypoints
+        cursor.execute('''
+            SELECT latitude, longitude, heart_rate, timestamp
+            FROM waypoints
+            WHERE activity_id = ?
+            ORDER BY timestamp ASC
+        ''', (activity_id,))
+        
+        waypoints = []
+        for row in cursor.fetchall():
+            waypoints.append({
+                'latitude': row[0],
+                'longitude': row[1],
+                'heart_rate': row[2],
+                'timestamp': row[3]
+            })
+        
+        conn.close()
+        
+        return jsonify({
+            'id': activity['id'],
+            'device_id': activity['device_id'],
+            'start_time': activity['start_time'],
+            'end_time': activity['end_time'],
+            'distance_km': activity['distance_km'],
+            'avg_speed': activity['avg_speed'],
+            'avg_heart_rate': activity['avg_heart_rate'],
+            'calories': activity['calories'],
+            'status': activity['status'],
+            'waypoints': waypoints
+        })
+        
+    except Exception as e:
+        print(f"❌ Errore get activity: {e}")
+        return jsonify({'error': str(e)}), 500
 
 # Avvia server
 if __name__ == '__main__':
