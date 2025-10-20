@@ -338,34 +338,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
 
-  void _showActivitySummary(Map<String, dynamic> stats) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('🎉 Attività Completata!', 
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildStatRow('📍 Distanza', '${stats['distance_km']} km'),
-            _buildStatRow('⏱️ Durata', '${stats['duration_minutes']} min'),
-            _buildStatRow('🏃 Velocità', '${stats['avg_speed']} min/km'),
-            _buildStatRow('❤️ BPM medio', '${stats['avg_heart_rate']}'),
-            _buildStatRow('🔥 Calorie', '${stats['calories']} kcal'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK', style: TextStyle(color: Color(0xFFFF4444))),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildStatRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -894,12 +866,12 @@ class __CountdownDialogState extends State<_CountdownDialog>
                     ),
                   )
                 : const Text(
-                    'GO!',
+                    'VIA!',
                     style: TextStyle(
                       color: Color(0xFF00FF87),
                       fontSize: 120,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 20,
+                      letterSpacing: 15,
                       fontFamily: 'SF Pro Display',
                       shadows: [
                         Shadow(

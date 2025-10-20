@@ -204,7 +204,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
                     const Color(0xFF8B5CF6),
                   ),
                   _buildStatCard(
-                    '🏃 VELOCITÀ MEDIA',
+                    '🏃 V. MEDIA',
                     '${activityData['avg_speed']?.toStringAsFixed(1) ?? '0'} min/km',
                     const Color(0xFFEC4899),
                   ),
@@ -230,7 +230,10 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pop(context);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFC5200),
                     padding: const EdgeInsets.symmetric(vertical: 18),

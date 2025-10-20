@@ -35,7 +35,7 @@ class GpsService {
 
       if (!_signalController.isClosed) {
         // Valutazione più dettagliata della qualità del segnale
-        if (position.accuracy <= 4 && position.speed != null) {
+        if (position.accuracy <= 4 && position.speed != Null) {
           _signalController.add(GpsSignalQuality.excellent);
         } else if (position.accuracy <= 6) {
           _signalController.add(GpsSignalQuality.good);
