@@ -13,13 +13,13 @@ CORS(app)
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# Connessione al database SQLite
+# ========== DATABASE FUNCTIONS ==========
+
 def get_db_connection():
     conn = sqlite3.connect('heart_rate.db')
     conn.row_factory = sqlite3.Row
     return conn
 
-# Migrazione database per aggiungere colonne GPS
 def migrate_db():
     """Aggiunge colonne GPS se non esistono"""
     try:
@@ -42,7 +42,6 @@ def migrate_db():
     except Exception as e:
         print(f"⚠️ Errore migrazione: {e}")
 
-# Inizializza database heart rate
 def init_db():
     conn = sqlite3.connect('heart_rate.db')
     cursor = conn.cursor()
@@ -60,15 +59,13 @@ def init_db():
     
     conn.commit()
     conn.close()
-    print('✅ Database inizializzato')
+    print('✅ Database heart_rate_data inizializzato')
 
-# Inizializza database activities
 def init_activities_db():
     """Crea tabelle per attività e waypoints"""
     conn = sqlite3.connect('heart_rate.db')
     cursor = conn.cursor()
     
-    # Tabella attività
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS activities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,7 +81,6 @@ def init_activities_db():
         )
     ''')
     
-    # Tabella waypoints
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS waypoints (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,7 +97,6 @@ def init_activities_db():
     conn.close()
     print('✅ Database attività inizializzato')
 
-# Funzione helper: calcola distanza tra waypoints
 def calculate_distance(waypoints):
     """Calcola distanza totale in km tra waypoints usando formula Haversine"""
     if len(waypoints) < 2:
@@ -113,7 +108,7 @@ def calculate_distance(waypoints):
         lat1, lon1 = waypoints[i]
         lat2, lon2 = waypoints[i + 1]
         
-        R = 6371  # Raggio Terra in km
+        R = 6371
         
         dlat = radians(lat2 - lat1)
         dlon = radians(lon2 - lon1)
@@ -125,8 +120,6 @@ def calculate_distance(waypoints):
         total_distance += distance
     
     return total_distance
-
-import base64
 
 def decode_heart_rate(data):
     try:
@@ -157,15 +150,12 @@ def decode_heart_rate(data):
     except Exception as e:
         print(f"❌ Errore decodifica heart rate: {e}")
         return 0
-
-# ========== ROUTES ==========
 # ========== ROUTES ==========
 
 @app.route('/')
 def index():
     return render_template('dashboard.html')
 
-# API: Statistiche
 @app.route('/api/stats')
 def get_stats():
     try:
@@ -201,7 +191,6 @@ def get_stats():
             'total_samples': 0
         })
 
-# API: Dati recenti
 @app.route('/api/recent')
 def get_recent_data():
     try:
@@ -237,7 +226,6 @@ def get_recent_data():
 
 # ========== ACTIVITY ENDPOINTS ==========
 
-# API: Inizia attività
 @app.route('/api/activity/start', methods=['POST'])
 def start_activity():
     try:
@@ -267,7 +255,6 @@ def start_activity():
         print(f"❌ Errore start activity: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# API: Aggiungi waypoint
 @app.route('/api/activity/waypoint', methods=['POST'])
 def add_waypoint():
     try:
@@ -291,7 +278,6 @@ def add_waypoint():
         conn.commit()
         conn.close()
         
-        # Broadcast waypoint ai client web
         socketio.emit('new_waypoint', {
             'activity_id': activity_id,
             'latitude': latitude,
@@ -305,7 +291,6 @@ def add_waypoint():
         print(f"❌ Errore waypoint: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# API: Termina attività
 @app.route('/api/activity/stop', methods=['POST'])
 def stop_activity():
     try:
@@ -315,7 +300,6 @@ def stop_activity():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Calcola distanza totale
         cursor.execute('''
             SELECT latitude, longitude FROM waypoints
             WHERE activity_id = ?
@@ -325,7 +309,6 @@ def stop_activity():
         waypoints = cursor.fetchall()
         distance_km = calculate_distance(waypoints)
         
-        # Calcola statistiche HR
         cursor.execute('''
             SELECT AVG(heart_rate), COUNT(*)
             FROM waypoints
@@ -335,7 +318,6 @@ def stop_activity():
         stats = cursor.fetchone()
         avg_hr = round(stats[0]) if stats[0] else 0
         
-        # Durata in minuti
         cursor.execute('''
             SELECT 
                 (julianday(datetime('now')) - julianday(start_time)) * 24 * 60 as duration_minutes
@@ -345,13 +327,9 @@ def stop_activity():
         
         duration_minutes = cursor.fetchone()[0]
         
-        # Velocità media (min/km)
         avg_speed = (duration_minutes / distance_km) if distance_km > 0 else 0
-        
-        # Calorie (formula approssimativa)
         calories = distance_km * 70
         
-        # Aggiorna attività
         cursor.execute('''
             UPDATE activities
             SET end_time = datetime('now'),
@@ -381,24 +359,18 @@ def stop_activity():
         print(f"❌ Errore stop activity: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# API: Ottieni attività con waypoints
 @app.route('/api/activity/<int:activity_id>')
 def get_activity(activity_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Info attività
-        cursor.execute('''
-            SELECT * FROM activities WHERE id = ?
-        ''', (activity_id,))
-        
+        cursor.execute('SELECT * FROM activities WHERE id = ?', (activity_id,))
         activity = cursor.fetchone()
         
         if not activity:
             return jsonify({'error': 'Activity not found'}), 404
         
-        # Waypoints
         cursor.execute('''
             SELECT latitude, longitude, heart_rate, timestamp
             FROM waypoints
@@ -433,80 +405,7 @@ def get_activity(activity_id):
     except Exception as e:
         print(f"❌ Errore get activity: {e}")
         return jsonify({'error': str(e)}), 500
-# ========== SOCKET.IO HANDLERS ==========
 
-@socketio.on('heart_rate_data')
-def handle_heart_rate_data(data):
-    try:
-        device_id = data.get('device_id', 'unknown')
-        latitude = data.get('latitude')
-        longitude = data.get('longitude')
-        
-        # Decodifica heart rate
-        heart_rate = decode_heart_rate(data)
-        
-        print(f"📊 Device: {device_id}")
-        print(f"   BPM: {heart_rate}")
-        print(f"   GPS: {latitude}, {longitude}")
-        
-        # Salva SOLO se BPM > 0
-        if heart_rate > 0:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute('''
-                INSERT INTO heart_rate_data (device_id, heart_rate, latitude, longitude)
-                VALUES (?, ?, ?, ?)
-            ''', (device_id, heart_rate, latitude, longitude))
-            
-            conn.commit()
-            conn.close()
-            
-            # Invia ai client web
-            emit('new_heart_rate', {
-                'device_id': device_id,
-                'heart_rate': heart_rate,
-                'latitude': latitude,
-                'longitude': longitude,
-                'timestamp': datetime.now().isoformat()
-            }, broadcast=True)
-            
-            print(f"✅ Dati salvati e inviati al web")
-        else:
-            print(f"⚠️ BPM = 0, dato ignorato")
-        
-    except Exception as e:
-        print(f"❌ Errore handle_heart_rate_ {e}")
-        import traceback
-        traceback.print_exc()
-
-@socketio.on('connect')
-def handle_connect():
-    print('✅ Client web connesso')
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('⚠️ Client web disconnesso')
-
-# ========== MAIN ==========
-
-# Inizializza database all'avvio
-migrate_db()
-init_db()
-init_activities_db()
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))
-    
-    print('=' * 60)
-    print('🚀 COOSPO Heart Rate Monitor Server')
-    print('=' * 60)
-    print(f'📡 Server su porta {port}')
-    print('=' * 60)
-    
-    socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
-
-# API: Lista tutte le attività
 @app.route('/api/activities')
 def get_activities():
     try:
@@ -544,8 +443,78 @@ def get_activities():
             })
         
         conn.close()
+        
+        print(f"✅ Inviate {len(activities)} attività")
         return jsonify(activities)
         
     except Exception as e:
         print(f"❌ Errore get activities: {e}")
-        return jsonify([])
+        return jsonify([]), 500
+# ========== SOCKET.IO HANDLERS ==========
+
+@socketio.on('heart_rate_data')
+def handle_heart_rate_data(data):
+    try:
+        device_id = data.get('device_id', 'unknown')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        
+        heart_rate = decode_heart_rate(data)
+        
+        print(f"📊 Device: {device_id}")
+        print(f"   BPM: {heart_rate}")
+        print(f"   GPS: {latitude}, {longitude}")
+        
+        if heart_rate > 0:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO heart_rate_data (device_id, heart_rate, latitude, longitude)
+                VALUES (?, ?, ?, ?)
+            ''', (device_id, heart_rate, latitude, longitude))
+            
+            conn.commit()
+            conn.close()
+            
+            emit('new_heart_rate', {
+                'device_id': device_id,
+                'heart_rate': heart_rate,
+                'latitude': latitude,
+                'longitude': longitude,
+                'timestamp': datetime.now().isoformat()
+            }, broadcast=True)
+            
+            print(f"✅ Dati salvati e inviati al web")
+        else:
+            print(f"⚠️ BPM = 0, dato ignorato")
+        
+    except Exception as e:
+        print(f"❌ Errore handle_heart_rate_ {e}")
+        import traceback
+        traceback.print_exc()
+
+@socketio.on('connect')
+def handle_connect():
+    print('✅ Client web connesso')
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('⚠️ Client web disconnesso')
+
+# ========== MAIN ==========
+
+migrate_db()
+init_db()
+init_activities_db()
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 10000))
+    
+    print('=' * 60)
+    print('🚀 COOSPO Heart Rate Monitor Server')
+    print('=' * 60)
+    print(f'📡 Server su porta {port}')
+    print('=' * 60)
+    
+    socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
