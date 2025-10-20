@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../database/local_db.dart';
 
 class ActivitySummaryScreen extends StatefulWidget {
   final int activityId;
@@ -31,18 +32,18 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
 
   Future<void> _loadActivityData() async {
     try {
-      final response = await http.get(
-        Uri.parse('$serverUrl/api/activity/${widget.activityId}'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        
+      print("📡 Caricamento attività ${widget.activityId}...");
+      
+      // STEP 1: Prova dal database locale
+      final localActivity = await LocalDatabase.getActivityWithWaypoints(widget.activityId);
+      
+      if (localActivity != null) {
+        print("✅ Attività caricata da cache locale");
         setState(() {
-          activityData = data;
+          activityData = localActivity;
           
           // Estrai waypoints
-          for (var wp in data['waypoints']) {
+          for (var wp in localActivity['waypoints']) {
             routePoints.add(LatLng(wp['latitude'], wp['longitude']));
             heartRates.add(wp['heart_rate'] ?? 0);
           }
@@ -50,11 +51,60 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
           isLoading = false;
         });
       }
+      
+      // STEP 2: Sincronizza con server
+      try {
+        final response = await http.get(
+          Uri.parse('$serverUrl/api/activity/${widget.activityId}'),
+        ).timeout(const Duration(seconds: 5));
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          
+          print("✅ Attività aggiornata dal server");
+          
+          // Salva in locale
+          await LocalDatabase.saveActivity({
+            'id': data['id'],
+            'device_id': data['device_id'],
+            'start_time': data['start_time'],
+            'end_time': data['end_time'],
+            'distance_km': data['distance_km'],
+            'avg_speed': data['avg_speed'],
+            'avg_heart_rate': data['avg_heart_rate'],
+            'calories': data['calories'],
+            'status': data['status'],
+          });
+          
+          await LocalDatabase.saveWaypoints(
+            data['id'],
+            List<Map<String, dynamic>>.from(data['waypoints']),
+          );
+          
+          setState(() {
+            activityData = data;
+            routePoints.clear();
+            heartRates.clear();
+            
+            for (var wp in data['waypoints']) {
+              routePoints.add(LatLng(wp['latitude'], wp['longitude']));
+              heartRates.add(wp['heart_rate'] ?? 0);
+            }
+            
+            isLoading = false;
+          });
+        }
+      } catch (e) {
+        print("⚠️ Server non raggiungibile, uso cache locale: $e");
+        // Continua con i dati locali già caricati
+      }
+      
     } catch (e) {
       print("❌ Errore caricamento attività: $e");
       setState(() => isLoading = false);
     }
   }
+
 
   Color _getHRColor(int hr) {
     if (hr < 100) return const Color(0xFF00C853); // Verde - basso

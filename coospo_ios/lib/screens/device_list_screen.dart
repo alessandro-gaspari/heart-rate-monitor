@@ -3,6 +3,8 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'device_detail_screen.dart';
+import 'activities_archive_screen.dart';
+
 
 enum CoospoDeviceType { 
   none, 
@@ -258,33 +260,60 @@ class _DeviceListScreenState extends State<DeviceListScreen>
     return Scaffold(
       backgroundColor: const Color(0xFF0A0E21),
       appBar: AppBar(
-        title: Row(
-          children: [
-            const Text(
-              'COOSPO',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Connect',
-              style: TextStyle(
-                color: const Color(0xFF1E90FF).withOpacity(0.8),
-                fontSize: 24,
-                fontWeight: FontWeight.w300,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ],
-        ),
         backgroundColor: const Color(0xFF0A0E21),
         elevation: 0,
+        title: const Text(
+          'Dispositivi Bluetooth',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         centerTitle: true,
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.menu, color: Colors.white, size: 28),
+            color: const Color(0xFF1E293B),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            offset: const Offset(0, 50),
+            onSelected: (value) {
+              if (value == 'archive') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ActivitiesArchiveScreen(),
+                  ),
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'archive',
+                child: Row(
+                  children: [
+                    Icon(Icons.history, color: Color(0xFFFC5200), size: 24),
+                    SizedBox(width: 12),
+                    Text(
+                      'Registro Attività',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'SF Pro Display',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
+
       body: Column(
         children: [
           Container(
@@ -325,7 +354,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                   borderRadius: BorderRadius.circular(16),
                 ),
                 elevation: 8,
-                shadowColor: _isScanning ? Colors.transparent : const Color(0xFF1E90FF).withOpacity(0.5),
+                shadowColor: _isScanning ? Colors.transparent : const Color(0xFF1E90FF).withOpacity(0),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,

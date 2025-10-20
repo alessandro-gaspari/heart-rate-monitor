@@ -10,14 +10,17 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  geolocator: ^10.1.0
-  google_fonts: ^6.1.0
-  cupertino_icons: ^1.0.2
   flutter_blue_plus: ^1.32.11
   permission_handler: ^11.3.0
   socket_io_client: ^2.0.3+1
+  geolocator: ^10.1.0
   apple_maps_flutter: ^1.2.1
   http: ^1.1.0
+  shared_preferences: ^2.2.2
+  sqflite: ^2.3.0 
+  path: ^1.8.3     
+  google_fonts: ^6.3.2
+
 
 dev_dependencies:
   flutter_test:

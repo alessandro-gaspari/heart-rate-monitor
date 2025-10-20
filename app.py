@@ -409,24 +409,31 @@ def get_activity(activity_id):
 @app.route('/api/activities')
 def get_activities():
     try:
+        device_id = request.args.get('device_id')
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            SELECT 
-                id,
-                device_id,
-                start_time,
-                end_time,
-                distance_km,
-                avg_speed,
-                avg_heart_rate,
-                calories,
-                status
-            FROM activities
-            WHERE status = 'completed'
-            ORDER BY start_time DESC
-        ''')
+        if device_id:
+            print(f"📡 Richiesta attività per device_id: {device_id}")
+            cursor.execute('''
+                SELECT 
+                    id, device_id, start_time, end_time,
+                    distance_km, avg_speed, avg_heart_rate, calories, status
+                FROM activities
+                WHERE status = 'completed' AND device_id = ?
+                ORDER BY start_time DESC
+            ''', (device_id,))
+        else:
+            print("📡 Richiesta tutte le attività (no device_id)")
+            cursor.execute('''
+                SELECT 
+                    id, device_id, start_time, end_time,
+                    distance_km, avg_speed, avg_heart_rate, calories, status
+                FROM activities
+                WHERE status = 'completed'
+                ORDER BY start_time DESC
+            ''')
         
         activities = []
         for row in cursor.fetchall():
@@ -444,12 +451,13 @@ def get_activities():
         
         conn.close()
         
-        print(f"✅ Inviate {len(activities)} attività")
+        print(f"✅ Inviate {len(activities)} attività (device_id={device_id})")
         return jsonify(activities)
         
     except Exception as e:
         print(f"❌ Errore get activities: {e}")
         return jsonify([]), 500
+
 # ========== SOCKET.IO HANDLERS ==========
 
 @socketio.on('heart_rate_data')

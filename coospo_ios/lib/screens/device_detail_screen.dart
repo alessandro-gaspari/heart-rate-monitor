@@ -8,6 +8,8 @@ import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'activity_screen.dart';
 import 'activity_summary_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
 
@@ -315,7 +317,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       );
       
       if (response.statusCode == 200) {
-        final stats = json.decode(response.body);
+        // final stats = json.decode(response.body);
         setState(() => isActivityRunning = false);
         
         print("✅ Attività terminata, navigando alla summary...");
@@ -338,6 +340,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
 
+  /*
   Widget _buildStatRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -351,6 +354,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       ),
     );
   }
+  */
+
   // ========== BLE CONNECTION & STREAMING ==========
   
   void _triggerHeartbeat() {
@@ -398,16 +403,23 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     if (signalStrength > -75) return Icons.signal_cellular_alt_2_bar;
     return Icons.signal_cellular_alt_1_bar;
   }
-
+  
   Future<void> _connectToDevice() async {
     try {
       await widget.device.connect();
       setState(() => isConnected = true);
+      
+      // SALVA DEVICE ID
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_device_id', widget.device.platformName);
+      print("✅ Device ID salvato: ${widget.device.platformName}");
+      
       await _startBleReading();
     } catch (e) {
       setState(() => isConnected = false);
     }
   }
+
 
   Future<void> _disconnect() async {
     print('🔴 DISCONNESSIONE');
@@ -711,28 +723,47 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
             ],
           ),
           
-          if (isMapExpanded)
-            Positioned(
-              bottom: 30,
-              right: 20,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.black87,
-                  borderRadius: BorderRadius.circular(50),
-                  border: Border.all(color: deviceColor, width: 2),
-                  boxShadow: [BoxShadow(color: deviceColor.withOpacity(0.6), blurRadius: 15, spreadRadius: 3)],
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
-                  children: [
-                    Icon(Icons.favorite, color: deviceColor, size: 20),
-                    const SizedBox(width: 8),
-                    Text(currentHeartRate > 0 ? '$currentHeartRate BPM' : '-- BPM',
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ],
-                ),
+        if (isMapExpanded)
+          Positioned(
+            bottom: 120,
+            right: 70,
+            left: 70,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(color: deviceColor, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: deviceColor.withOpacity(0.6),
+                    blurRadius: 15,
+                    spreadRadius: 3,
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              child: Row(
+                children: [
+                  Icon(Icons.favorite, color: deviceColor, size: 30),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      currentHeartRate > 0 ? '$currentHeartRate BPM' : ' -- BPM ',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 25,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis, // evita overflow
+                      textAlign: TextAlign.center,     // centra il testo
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(Icons.favorite, color: deviceColor, size: 30),
+                ],
               ),
             ),
+          ),
         ],
       ),
     );
