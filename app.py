@@ -505,3 +505,47 @@ if __name__ == '__main__':
     print('=' * 60)
     
     socketio.run(app, host='0.0.0.0', port=port, debug=True, allow_unsafe_werkzeug=True)
+
+# API: Lista tutte le attività
+@app.route('/api/activities')
+def get_activities():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT 
+                id,
+                device_id,
+                start_time,
+                end_time,
+                distance_km,
+                avg_speed,
+                avg_heart_rate,
+                calories,
+                status
+            FROM activities
+            WHERE status = 'completed'
+            ORDER BY start_time DESC
+        ''')
+        
+        activities = []
+        for row in cursor.fetchall():
+            activities.append({
+                'id': row['id'],
+                'device_id': row['device_id'],
+                'start_time': row['start_time'],
+                'end_time': row['end_time'],
+                'distance_km': row['distance_km'],
+                'avg_speed': row['avg_speed'],
+                'avg_heart_rate': row['avg_heart_rate'],
+                'calories': row['calories'],
+                'status': row['status']
+            })
+        
+        conn.close()
+        return jsonify(activities)
+        
+    except Exception as e:
+        print(f"❌ Errore get activities: {e}")
+        return jsonify([])
