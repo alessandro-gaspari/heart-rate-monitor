@@ -135,12 +135,17 @@ function initMap() {
     
     L.control.zoom({ position: 'topright' }).addTo(map);
     
-    // MAPPA DARK-MATTER con filtro giallo personalizzato
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // OPZIONE 1: Sfondo grigio chiaro con strade nere (Positron)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
-        maxZoom: 19,
-        className: 'map-tiles' // aggiungi questa classe per il filtro CSS
+        maxZoom: 19
     }).addTo(map);
+
+    // OPZIONE 2: Sfondo grigio scuro con strade bianche (Dark Matter No Labels)
+    // L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+    //     attribution: '© OpenStreetMap',
+    //     maxZoom: 19
+    // }).addTo(map);
 
     const pulseIcon = L.divIcon({
         className: 'gps-marker',
@@ -203,19 +208,6 @@ function initMap() {
     document.head.appendChild(style);
     
     console.log('✅ Mappa inizializzata');
-}
-
-function addDataToChart(value) {
-    if (!chart) return;
-    const now = new Date();
-    const timeLabel = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    chart.data.labels.push(timeLabel);
-    chart.data.datasets[0].data.push(value);
-    if (chart.data.labels.length > 50) {
-        chart.data.labels.shift();
-        chart.data.datasets[0].data.shift();
-    }
-    chart.update('none');
 }
 
 function loadStats() {
