@@ -47,6 +47,116 @@ body {
     50% { opacity: 0.8; }
 }
 
+/* Mappa GPS */
+.map-card {
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
+    border: 2px solid var(--accent-yellow);
+    box-shadow: 0 10px 40px rgba(255, 215, 0, 0.3);
+}
+
+.map-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 60px rgba(255, 215, 0, 0.5);
+}
+
+.map-container {
+    height: 450px;
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+    margin-top: 1rem;
+    border: 2px solid rgba(255, 215, 0, 0.3);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    background: #0a0a0a;
+}
+
+.gps-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: rgba(255, 215, 0, 0.2);
+    border-radius: 50px;
+    color: var(--accent-yellow);
+    font-size: 0.95rem;
+    font-weight: 700;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.gps-status.active {
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--accent-green);
+    border-color: var(--accent-green);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.gps-status svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* Leaflet Map Customization */
+.leaflet-container {
+    background: #0a0a0a !important;
+    font-family: 'Inter', sans-serif !important;
+    z-index: 1;
+}
+
+.leaflet-tile-pane {
+    filter: brightness(0.6) contrast(1.2) saturate(0.8);
+}
+
+.leaflet-popup-content-wrapper {
+    background: rgba(26, 26, 26, 0.95) !important;
+    color: white !important;
+    border-radius: 12px !important;
+    border: 2px solid rgba(255, 215, 0, 0.5) !important;
+    backdrop-filter: blur(10px) !important;
+    padding: 12px !important;
+}
+
+.leaflet-popup-tip {
+    background: rgba(26, 26, 26, 0.95) !important;
+}
+
+.leaflet-control-zoom a {
+    background: rgba(26, 26, 26, 0.9) !important;
+    color: var(--accent-yellow) !important;
+    border-color: rgba(255, 215, 0, 0.3) !important;
+}
+
+.leaflet-control-zoom a:hover {
+    background: rgba(255, 215, 0, 0.2) !important;
+    color: var(--accent-yellow) !important;
+}
+
+.leaflet-control-attribution {
+    background: rgba(0, 0, 0, 0.5) !important;
+    color: #999 !important;
+    font-size: 10px !important;
+}
+
+/* Custom Marker Animation */
+.custom-marker {
+    animation: markerPulse 2s ease-in-out infinite;
+}
+
+@keyframes markerPulse {
+    0%, 100% {
+        transform: scale(1);
+        filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
+    }
+    50% {
+        transform: scale(1.1);
+        filter: drop-shadow(0 0 20px rgba(255, 215, 0, 1));
+    }
+}
+
 /* Glass Effect */
 .glass {
     background: var(--bg-card);

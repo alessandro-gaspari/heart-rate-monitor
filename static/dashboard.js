@@ -6,10 +6,8 @@ let currentBpm = 0;
 let map;
 let marker;
 let lastKnownPosition = [45.4642, 9.19];
-let userHasMovedMap = false;
-let userHasLockeMap = false;
 
-// Inizializza grafico ultra-moderno
+// Inizializza grafico con tema NERO/GIALLO
 function initChart() {
     const ctx = document.getElementById('heartRateChart');
     if (!ctx) {
@@ -17,31 +15,31 @@ function initChart() {
         return;
     }
 
-    // Gradiente rosso-arancione per area sotto la linea
+    // Gradiente giallo-oro per area sotto la linea
     const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
-    gradient.addColorStop(0, 'rgba(239, 68, 68, 0.4)');
-    gradient.addColorStop(0.5, 'rgba(249, 115, 22, 0.2)');
-    gradient.addColorStop(1, 'rgba(249, 115, 22, 0)');
+    gradient.addColorStop(0, 'rgba(255, 215, 0, 0.4)');
+    gradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.2)');
+    gradient.addColorStop(1, 'rgba(255, 165, 0, 0)');
 
     chart = new Chart(ctx, {
         type: 'line',
-        data: { // ✅ corretto
+        data:  {
             labels: [],
             datasets: [{
                 label: 'Heart Rate',
-                data: [], // ✅ corretto
-                borderColor: '#ef4444',
+                data: [],
+                borderColor: '#FFD700',
                 backgroundColor: gradient,
                 borderWidth: 3,
                 tension: 0.4,
                 fill: true,
                 pointRadius: 0,
                 pointHoverRadius: 8,
-                pointBackgroundColor: '#ef4444',
-                pointBorderColor: '#fff',
+                pointBackgroundColor: '#FFD700',
+                pointBorderColor: '#000',
                 pointBorderWidth: 3,
-                pointHoverBackgroundColor: '#ef4444',
-                pointHoverBorderColor: '#fff',
+                pointHoverBackgroundColor: '#FFD700',
+                pointHoverBorderColor: '#FFF',
                 pointHoverBorderWidth: 4
             }]
         },
@@ -60,11 +58,11 @@ function initChart() {
                 x: {
                     display: true,
                     grid: {
-                        color: 'rgba(255, 255, 255, 0.05)',
+                        color: 'rgba(255, 215, 0, 0.1)',
                         drawBorder: false
                     },
                     ticks: {
-                        color: '#94a3b8',
+                        color: '#cccccc',
                         font: {
                             family: 'Inter',
                             size: 11
@@ -78,11 +76,11 @@ function initChart() {
                     min: 40,
                     max: 200,
                     grid: {
-                        color: 'rgba(255, 255, 255, 0.05)',
+                        color: 'rgba(255, 215, 0, 0.1)',
                         drawBorder: false
                     },
                     ticks: {
-                        color: '#94a3b8',
+                        color: '#cccccc',
                         font: {
                             family: 'Inter',
                             size: 12
@@ -97,10 +95,10 @@ function initChart() {
                     display: false
                 },
                 tooltip: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                    titleColor: '#ef4444',
+                    backgroundColor: 'rgba(26, 26, 26, 0.95)',
+                    titleColor: '#FFD700',
                     bodyColor: '#fff',
-                    borderColor: '#ef4444',
+                    borderColor: '#FFD700',
                     borderWidth: 2,
                     padding: 14,
                     displayColors: false,
@@ -125,13 +123,11 @@ function initChart() {
     console.log('✅ Grafico inizializzato');
 }
 
-
+// Aggiorna posizione GPS sulla mappa
 function updateMapPosition(lat, lng) {
     if (!map || !marker) return;
     
     lastKnownPosition = [lat, lng];
-    
-    // AGGIORNA SOLO IL MARKER - MAI LA VISTA
     marker.setLatLng(lastKnownPosition);
     
     // Aggiorna GPS status
@@ -146,17 +142,19 @@ function updateMapPosition(lat, lng) {
     }
 }
 
+// Inizializza mappa con tema SCURO e marker GIALLO
 function initMap() {
     map = L.map('map', { zoomControl: false }).setView([45.4642, 9.19], 13);
     
     L.control.zoom({ position: 'topright' }).addTo(map);
     
+    // Dark tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19
     }).addTo(map);
 
-    // MARKER CON ICON CORRETTO (anchor al centro perfetto)
+    // Marker GPS con animazione gialla
     const pulseIcon = L.divIcon({
         className: 'gps-marker',
         html: `
@@ -164,12 +162,12 @@ function initMap() {
             <div class="marker-dot"></div>
         `,
         iconSize: [20, 20],
-        iconAnchor: [10, 10]  // CENTRO ESATTO del marker
+        iconAnchor: [10, 10]
     });
     
     marker = L.marker(lastKnownPosition, { icon: pulseIcon }).addTo(map);
 
-    // Bottone centramento
+    // Bottone centramento GPS (GIALLO)
     const centerBtn = L.control({ position: 'bottomright' });
     centerBtn.onAdd = function() {
         const div = L.DomUtil.create('div', 'leaflet-bar');
@@ -178,18 +176,19 @@ function initMap() {
         
         div.innerHTML = `
             <button title="Centra su GPS" style="
-                background: linear-gradient(135deg, #ef4444, #dc2626);
-                color: white;
+                background: linear-gradient(135deg, #FFD700, #FFA500);
+                color: #000;
                 border: none;
                 width: 52px;
                 height: 52px;
                 border-radius: 50%;
                 cursor: pointer;
-                box-shadow: 0 4px 20px rgba(239, 68, 68, 0.7);
+                box-shadow: 0 4px 20px rgba(255, 215, 0, 0.6);
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 transition: transform 0.2s ease;
+                font-weight: bold;
             " onmouseover="this.style.transform='scale(1.1)'" 
                onmouseout="this.style.transform='scale(1)'">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -212,7 +211,7 @@ function initMap() {
     };
     centerBtn.addTo(map);
 
-    // CSS per marker GPS
+    // CSS per marker GPS giallo animato
     const style = document.createElement('style');
     style.textContent = `
         .gps-marker {
@@ -228,7 +227,7 @@ function initMap() {
             transform: translate(-50%, -50%);
             width: 40px;
             height: 40px;
-            background: rgba(239, 68, 68, 0.3);
+            background: rgba(255, 215, 0, 0.3);
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
@@ -240,10 +239,10 @@ function initMap() {
             transform: translate(-50%, -50%);
             width: 16px;
             height: 16px;
-            background: #ef4444;
+            background: #FFD700;
             border: 3px solid white;
             border-radius: 50%;
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
             z-index: 1000;
         }
         
@@ -262,8 +261,6 @@ function initMap() {
     
     console.log('✅ Mappa inizializzata');
 }
-
-
 
 // Aggiungi dato al grafico
 function addDataToChart(value) {
