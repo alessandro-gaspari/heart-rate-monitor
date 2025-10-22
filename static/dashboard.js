@@ -150,7 +150,7 @@ function initMap() {
 
     const pulseIcon = L.divIcon({
         className: 'gps-marker',
-        html: '<div class="marker-pulse"></div><div class="marker-dot">📍</div>',
+        html: '<div class="marker-pulse"></div><div class="marker-dot"></div>',
         iconSize: [60, 60],
         iconAnchor: [30, 30]
     });
@@ -164,11 +164,11 @@ function initMap() {
         div.innerHTML = `
             <button title="Centra su GPS" style="
                 background: linear-gradient(135deg, #FFD700, #FFA500);
-                color: #000; border: none; width: 52px; height: 52px;
+                color: #000; border: none; width: 70px; height: 70px;
                 border-radius: 50%; cursor: pointer;
-                box-shadow: 0 4px 20px rgba(255, 215, 0, 0.6);
+                box-shadow: 0 6px 25px rgba(255, 215, 0, 0.7);
                 display: flex; align-items: center; justify-content: center;
-                transition: transform 0.2s ease; font-weight: bold;">
+                transition: transform 0.3s ease; font-weight: bold; font-size: 36px;">
                 📍
             </button>
         `;
@@ -176,36 +176,61 @@ function initMap() {
             e.stopPropagation();
             map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
         };
+
+        const btn = div.querySelector('button');
+        btn.onmouseover = () => btn.style.transform = 'scale(1.1)';
+        btn.onmouseout = () => btn.style.transform = 'scale(1)';
+        
+        div.onclick = (e) => {
+            e.stopPropagation();
+            map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
+        };
+        
         return div;
     };
     centerBtn.addTo(map);
 
     const style = document.createElement('style');
     style.textContent = `
-        .gps-marker { position: relative; width: 20px; height: 20px; }
+        .gps-marker { 
+            position: relative; 
+            width: 60px; 
+            height: 60px;
+            background: transparent !important;
+            border: none !important;
+        }
         .marker-pulse {
-            position: absolute; top: 50%; left: 50%;
+            position: absolute; 
+            top: 50%; 
+            left: 50%;
             transform: translate(-50%, -50%);
-            width: 40px; height: 40px;
+            width: 80px; 
+            height: 80px;
             background: rgba(255, 215, 0, 0.3);
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
         .marker-dot {
-            position: absolute; top: 50%; left: 50%;
+            position: absolute; 
+            top: 50%; 
+            left: 50%;
             transform: translate(-50%, -50%);
-            width: 16px; height: 16px;
-            background: #FFD700;
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            font-size: 40px;
             z-index: 1000;
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
         }
         @keyframes pulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            50% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+            0%, 100% { 
+                transform: translate(-50%, -50%) scale(1); 
+                opacity: 1; 
+            }
+            50% { 
+                transform: translate(-50%, -50%) scale(2); 
+                opacity: 0; 
+            }
         }
     `;
+
     document.head.appendChild(style);
     
     console.log('✅ Mappa inizializzata');
