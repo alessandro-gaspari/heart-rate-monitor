@@ -160,12 +160,12 @@ function initMap() {
         div.innerHTML = `
             <button title="Centra su GPS" style="
                 background: linear-gradient(135deg, #FFD700, #FFA500);
-                color: #000; border: none; width: 70px; height: 70px;
+                color: #000; border: none; width: 60px; height: 60px;
                 border-radius: 50%; cursor: pointer;
                 box-shadow: 0 6px 25px rgba(255, 215, 0, 0.7);
                 display: flex; align-items: center; justify-content: center;
                 transition: all 0.3s ease; font-weight: bold; font-size: 36px;">
-                ⌖
+                📍
             </button>
         `;
         const btn = div.querySelector('button');
