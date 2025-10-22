@@ -165,7 +165,7 @@ function initMap() {
                 box-shadow: 0 6px 25px rgba(255, 215, 0, 0.7);
                 display: flex; align-items: center; justify-content: center;
                 transition: all 0.3s ease; font-weight: bold; font-size: 36px;">
-                📍
+                ⦿
             </button>
         `;
         const btn = div.querySelector('button');
@@ -184,8 +184,8 @@ function initMap() {
         .gps-marker { position: relative; width: 60px; height: 60px; background: transparent !important; border: none !important; }
         .marker-pulse {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 80px; height: 80px; background: rgba(255, 215, 0, 0.4);
-            border-radius: 50%; animation: pulse 2s infinite;
+            width: 50px; height: 50px; background: rgba(255, 215, 0, 0.4);
+            border-radius: 30%; animation: pulse 2s infinite;
         }
         .marker-dot {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
