@@ -156,11 +156,11 @@ function initMap() {
     const centerBtn = L.control({ position: 'bottomright' });
     centerBtn.onAdd = function() {
         const div = L.DomUtil.create('div', '');
-        div.style.cssText = 'margin-bottom: 20px; margin-right: 10px; background: transparent; border: none; box-shadow: none;';
+        div.style.cssText = 'margin-bottom: 20px; margin-right: 20px; background: transparent; border: none; box-shadow: none;';
         div.innerHTML = `
             <button title="Centra su GPS" style="
                 background: linear-gradient(135deg, #FFD700, #FFA500);
-                color: #000; border: none; width: 60px; height: 60px;
+                color: #000; border: none; width: 70px; height: 70px;
                 border-radius: 50%; cursor: pointer;
                 box-shadow: 0 6px 25px rgba(255, 215, 0, 0.7);
                 display: flex; align-items: center; justify-content: center;
