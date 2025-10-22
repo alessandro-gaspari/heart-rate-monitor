@@ -138,7 +138,8 @@ function initMap() {
     // OPZIONE 1: Sfondo grigio chiaro con strade nere (Positron)
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
-        maxZoom: 19
+        maxZoom: 19,
+        className: 'map-tiles-yellow'
     }).addTo(map);
 
     // OPZIONE 2: Sfondo grigio scuro con strade bianche (Dark Matter No Labels)
@@ -149,9 +150,9 @@ function initMap() {
 
     const pulseIcon = L.divIcon({
         className: 'gps-marker',
-        html: '<div class="marker-pulse"></div><div class="marker-dot"></div>',
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
+        html: '<div class="marker-pulse"></div><div class="marker-dot">📍</div>',
+        iconSize: [60, 60],
+        iconAnchor: [30, 30]
     });
     
     marker = L.marker(lastKnownPosition, { icon: pulseIcon }).addTo(map);

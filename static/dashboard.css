@@ -201,7 +201,7 @@ body {
 }
 
 .logo img {
-    max-height: 50px;
+    max-height: 120px;
     filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
 }
 
@@ -390,14 +390,25 @@ body {
 
 /* Leaflet Map - Sfondo grigio scuro con strade gialle */
 .leaflet-container {
-    background: #2a2a2a !important;
+    background: #1a1a1a !important;
     font-family: 'Inter', sans-serif !important;
-    z-index: 1;
 }
+
+/* Rimuovi sfondo bianco marker Leaflet */
+.leaflet-marker-icon {
+    background: transparent !important;
+    border: none !important;
+}
+
+.leaflet-div-icon {
+    background: transparent !important;
+    border: none !important;
+}
+
 
 /* Filtro per rendere le tiles con strade gialle */
 .leaflet-tile-pane {
-    filter: brightness(0.7) contrast(1.3) saturate(0.3) hue-rotate(30deg);
+    filter: brightness(0.6) contrast(1.4) saturate(0.2) hue-rotate(40deg);
 }
 
 /* Oppure usa questo filtro per un effetto più giallo */
