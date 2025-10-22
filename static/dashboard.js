@@ -185,7 +185,7 @@ function initMap() {
         .marker-pulse {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 50px; height: 50px; background: rgba(255, 215, 0, 0.4);
-            border-radius: 30%; animation: pulse 2s infinite;
+            border-radius: 100%; animation: pulse 2s infinite;
         }
         .marker-dot {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
