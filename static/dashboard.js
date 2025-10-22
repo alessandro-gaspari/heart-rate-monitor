@@ -135,9 +135,11 @@ function initMap() {
     
     L.control.zoom({ position: 'topright' }).addTo(map);
     
+    // MAPPA DARK-MATTER con filtro giallo personalizzato
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
-        maxZoom: 19
+        maxZoom: 19,
+        className: 'map-tiles' // aggiungi questa classe per il filtro CSS
     }).addTo(map);
 
     const pulseIcon = L.divIcon({
