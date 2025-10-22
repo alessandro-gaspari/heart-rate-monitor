@@ -138,7 +138,8 @@ function initMap() {
     
     L.control.zoom({ position: 'topright' }).addTo(map);
     
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // VOYAGER DARK - Sfondo scuro con strade CHIARE e ben visibili
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19
     }).addTo(map);
