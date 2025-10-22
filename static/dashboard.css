@@ -360,7 +360,7 @@ body {
 .heart-animation {
     font-size: 80px;
     margin-bottom: 1rem;
-    filter: drop-shadow(0 0 20px var(--glow-red));
+    filter: drop-shadow(0 0 20px var(--glow-yellow));
     animation: heartbeat 1.2s ease-in-out infinite;
 }
 
