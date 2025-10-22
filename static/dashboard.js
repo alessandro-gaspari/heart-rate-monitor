@@ -15,7 +15,6 @@ function initChart() {
         return;
     }
 
-    // Gradiente giallo-arancione
     const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
     gradient.addColorStop(0, 'rgba(255, 215, 0, 0.4)');
     gradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.2)');
@@ -108,8 +107,12 @@ function initChart() {
 }
 
 function updateMapPosition(lat, lng) {
-    if (!map || !marker) return;
+    if (!map || !marker) {
+        console.warn('⚠️ Mappa o marker non inizializzati');
+        return;
+    }
     
+    console.log('📍 Aggiornamento posizione GPS:', lat, lng);
     lastKnownPosition = [lat, lng];
     marker.setLatLng(lastKnownPosition);
     
@@ -135,18 +138,10 @@ function initMap() {
     
     L.control.zoom({ position: 'topright' }).addTo(map);
     
-    // OPZIONE 1: Sfondo grigio chiaro con strade nere (Positron)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
-        maxZoom: 19,
-        className: 'map-tiles-yellow'
+        maxZoom: 19
     }).addTo(map);
-
-    // OPZIONE 2: Sfondo grigio scuro con strade bianche (Dark Matter No Labels)
-    // L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
-    //     attribution: '© OpenStreetMap',
-    //     maxZoom: 19
-    // }).addTo(map);
 
     const pulseIcon = L.divIcon({
         className: 'gps-marker',
@@ -154,7 +149,7 @@ function initMap() {
         iconSize: [60, 60],
         iconAnchor: [30, 30]
     });
-
+    
     marker = L.marker(lastKnownPosition, { icon: pulseIcon }).addTo(map);
 
     const centerBtn = L.control({ position: 'bottomright' });
@@ -164,88 +159,59 @@ function initMap() {
         div.innerHTML = `
             <button title="Centra su GPS" style="
                 background: linear-gradient(135deg, #FFD700, #FFA500);
-                color: #000; 
-                border: none; 
-                width: 70px; 
-                height: 70px;
-                border-radius: 50%; 
-                cursor: pointer;
+                color: #000; border: none; width: 70px; height: 70px;
+                border-radius: 50%; cursor: pointer;
                 box-shadow: 0 6px 25px rgba(255, 215, 0, 0.7);
-                display: flex; 
-                align-items: center; 
-                justify-content: center;
-                transition: all 0.3s ease; 
-                font-weight: bold;
-                font-size: 36px;">
+                display: flex; align-items: center; justify-content: center;
+                transition: all 0.3s ease; font-weight: bold; font-size: 36px;">
                 📍
             </button>
         `;
-        div.onclick = (e) => {
-            e.stopPropagation();
-            map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
-        };
-
         const btn = div.querySelector('button');
         btn.onmouseover = () => btn.style.transform = 'scale(1.1)';
         btn.onmouseout = () => btn.style.transform = 'scale(1)';
-        
         div.onclick = (e) => {
             e.stopPropagation();
             map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
         };
-        
         return div;
     };
     centerBtn.addTo(map);
 
     const style = document.createElement('style');
     style.textContent = `
-        .gps-marker { 
-            position: relative; 
-            width: 60px; 
-            height: 60px;
-            background: transparent !important;
-            border: none !important;
-        }
+        .gps-marker { position: relative; width: 60px; height: 60px; background: transparent !important; border: none !important; }
         .marker-pulse {
-            position: absolute; 
-            top: 50%; 
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 80px; 
-            height: 80px;
-            background: rgba(255, 215, 0, 0.4);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 80px; height: 80px; background: rgba(255, 215, 0, 0.4);
+            border-radius: 50%; animation: pulse 2s infinite;
         }
         .marker-dot {
-            position: absolute; 
-            top: 50%; 
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 20px;
-            height: 20px;
-            background: #FFD700;
-            border: 4px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 20px rgba(255, 215, 0, 1);
-            z-index: 1000;
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 20px; height: 20px; background: #FFD700; border: 4px solid white;
+            border-radius: 50%; box-shadow: 0 0 20px rgba(255, 215, 0, 1); z-index: 1000;
         }
         @keyframes pulse {
-            0%, 100% { 
-                transform: translate(-50%, -50%) scale(1); 
-                opacity: 1; 
-            }
-            50% { 
-                transform: translate(-50%, -50%) scale(2); 
-                opacity: 0; 
-            }
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
         }
     `;
-
     document.head.appendChild(style);
     
     console.log('✅ Mappa inizializzata');
+}
+
+function addDataToChart(value) {
+    if (!chart) return;
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    chart.data.labels.push(timeLabel);
+    chart.data.datasets[0].data.push(value);
+    if (chart.data.labels.length > 50) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+    }
+    chart.update('none');
 }
 
 function loadStats() {
@@ -302,15 +268,22 @@ function initSocketIO() {
 
     socket.on('new_heart_rate', function(data) {
         console.log('📡 Dati ricevuti:', data);
+        
         const bpm = data.heart_rate;
         const bpmEl = document.getElementById('currentBpm');
         const updateEl = document.getElementById('lastUpdate');
         if (bpmEl) bpmEl.textContent = bpm;
         if (updateEl) updateEl.textContent = 'Aggiornato ora';
+        
         addDataToChart(bpm);
+        
         if (data.latitude && data.longitude) {
+            console.log('✅ GPS ricevuto:', data.latitude, data.longitude);
             updateMapPosition(data.latitude, data.longitude);
+        } else {
+            console.warn('⚠️ GPS non presente nei dati');
         }
+        
         if (Math.random() < 0.1) loadStats();
     });
 
