@@ -7,7 +7,7 @@ let map;
 let marker;
 let lastKnownPosition = [45.4642, 9.19];
 
-// Inizializza grafico con tema NERO/GIALLO
+// Inizializza grafico
 function initChart() {
     const ctx = document.getElementById('heartRateChart');
     if (!ctx) {
@@ -15,7 +15,7 @@ function initChart() {
         return;
     }
 
-    // Gradiente giallo-oro per area sotto la linea
+    // Gradiente giallo-arancione
     const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
     gradient.addColorStop(0, 'rgba(255, 215, 0, 0.4)');
     gradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.2)');
@@ -23,7 +23,7 @@ function initChart() {
 
     chart = new Chart(ctx, {
         type: 'line',
-        data:  {
+        data: {
             labels: [],
             datasets: [{
                 label: 'Heart Rate',
@@ -63,10 +63,7 @@ function initChart() {
                     },
                     ticks: {
                         color: '#cccccc',
-                        font: {
-                            family: 'Inter',
-                            size: 11
-                        },
+                        font: { family: 'Inter', size: 11 },
                         maxRotation: 0,
                         autoSkipPadding: 20
                     }
@@ -81,19 +78,14 @@ function initChart() {
                     },
                     ticks: {
                         color: '#cccccc',
-                        font: {
-                            family: 'Inter',
-                            size: 12
-                        },
+                        font: { family: 'Inter', size: 12 },
                         callback: val => val + ' bpm',
                         stepSize: 20
                     }
                 }
             },
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     backgroundColor: 'rgba(26, 26, 26, 0.95)',
                     titleColor: '#FFD700',
@@ -102,16 +94,8 @@ function initChart() {
                     borderWidth: 2,
                     padding: 14,
                     displayColors: false,
-                    titleFont: {
-                        family: 'Inter',
-                        size: 13,
-                        weight: '600'
-                    },
-                    bodyFont: {
-                        family: 'Orbitron',
-                        size: 18,
-                        weight: '700'
-                    },
+                    titleFont: { family: 'Inter', size: 13, weight: '600' },
+                    bodyFont: { family: 'Orbitron', size: 18, weight: '700' },
                     callbacks: {
                         label: ctx => ctx.parsed.y + ' BPM'
                     }
@@ -123,14 +107,12 @@ function initChart() {
     console.log('✅ Grafico inizializzato');
 }
 
-// Aggiorna posizione GPS sulla mappa
 function updateMapPosition(lat, lng) {
     if (!map || !marker) return;
     
     lastKnownPosition = [lat, lng];
     marker.setLatLng(lastKnownPosition);
     
-    // Aggiorna GPS status
     const gpsStatus = document.getElementById('gpsStatus');
     if (gpsStatus) {
         gpsStatus.innerHTML = `
@@ -142,119 +124,78 @@ function updateMapPosition(lat, lng) {
     }
 }
 
-// Inizializza mappa con tema SCURO e marker GIALLO
 function initMap() {
+    const mapElement = document.getElementById('map');
+    if (!mapElement) {
+        console.error('❌ Elemento #map non trovato nel DOM');
+        return;
+    }
+
     map = L.map('map', { zoomControl: false }).setView([45.4642, 9.19], 13);
     
     L.control.zoom({ position: 'topright' }).addTo(map);
     
-    // Dark tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19
     }).addTo(map);
 
-    // Marker GPS con animazione gialla
     const pulseIcon = L.divIcon({
         className: 'gps-marker',
-        html: `
-            <div class="marker-pulse"></div>
-            <div class="marker-dot"></div>
-        `,
+        html: '<div class="marker-pulse"></div><div class="marker-dot"></div>',
         iconSize: [20, 20],
         iconAnchor: [10, 10]
     });
     
     marker = L.marker(lastKnownPosition, { icon: pulseIcon }).addTo(map);
 
-    // Bottone centramento GPS (GIALLO)
     const centerBtn = L.control({ position: 'bottomright' });
     centerBtn.onAdd = function() {
         const div = L.DomUtil.create('div', 'leaflet-bar');
-        div.style.marginBottom = '20px';
-        div.style.marginRight = '10px';
-        
+        div.style.cssText = 'margin-bottom: 20px; margin-right: 10px;';
         div.innerHTML = `
             <button title="Centra su GPS" style="
                 background: linear-gradient(135deg, #FFD700, #FFA500);
-                color: #000;
-                border: none;
-                width: 52px;
-                height: 52px;
-                border-radius: 50%;
-                cursor: pointer;
+                color: #000; border: none; width: 52px; height: 52px;
+                border-radius: 50%; cursor: pointer;
                 box-shadow: 0 4px 20px rgba(255, 215, 0, 0.6);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: transform 0.2s ease;
-                font-weight: bold;
-            " onmouseover="this.style.transform='scale(1.1)'" 
-               onmouseout="this.style.transform='scale(1)'">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <line x1="12" y1="2" x2="12" y2="6"></line>
-                    <line x1="12" y1="18" x2="12" y2="22"></line>
-                    <line x1="2" y1="12" x2="6" y2="12"></line>
-                    <line x1="18" y1="12" x2="22" y2="12"></line>
-                </svg>
+                display: flex; align-items: center; justify-content: center;
+                transition: transform 0.2s ease; font-weight: bold;">
+                📍
             </button>
         `;
-        
-        div.onclick = function(e) {
+        div.onclick = (e) => {
             e.stopPropagation();
             map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
         };
-        
         return div;
     };
     centerBtn.addTo(map);
 
-    // CSS per marker GPS giallo animato
     const style = document.createElement('style');
     style.textContent = `
-        .gps-marker {
-            position: relative;
-            width: 20px;
-            height: 20px;
-        }
-        
+        .gps-marker { position: relative; width: 20px; height: 20px; }
         .marker-pulse {
-            position: absolute;
-            top: 50%;
-            left: 50%;
+            position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 40px;
-            height: 40px;
+            width: 40px; height: 40px;
             background: rgba(255, 215, 0, 0.3);
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
-        
         .marker-dot {
-            position: absolute;
-            top: 50%;
-            left: 50%;
+            position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            width: 16px;
-            height: 16px;
+            width: 16px; height: 16px;
             background: #FFD700;
             border: 3px solid white;
             border-radius: 50%;
             box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
             z-index: 1000;
         }
-        
         @keyframes pulse {
-            0%, 100% { 
-                transform: translate(-50%, -50%) scale(1); 
-                opacity: 1; 
-            }
-            50% { 
-                transform: translate(-50%, -50%) scale(2); 
-                opacity: 0; 
-            }
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
         }
     `;
     document.head.appendChild(style);
@@ -262,7 +203,6 @@ function initMap() {
     console.log('✅ Mappa inizializzata');
 }
 
-// Aggiungi dato al grafico
 function addDataToChart(value) {
     if (!chart) return;
     const now = new Date();
@@ -276,7 +216,6 @@ function addDataToChart(value) {
     chart.update('none');
 }
 
-// Carica statistiche
 function loadStats() {
     fetch('/api/stats')
         .then(res => res.json())
@@ -289,11 +228,11 @@ function loadStats() {
         .catch(err => console.error('❌ Errore stats:', err));
 }
 
-// Carica dati storici
 function loadHistoricalData() {
     fetch('/api/recent')
         .then(res => res.json())
         .then(data => {
+            if (!chart) return;
             data.forEach(item => {
                 const timestamp = new Date(item.timestamp);
                 const timeLabel = timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -305,7 +244,6 @@ function loadHistoricalData() {
         .catch(err => console.error('❌ Errore dati storici:', err));
 }
 
-// Inizializza Socket.IO
 function initSocketIO() {
     socket = io({
         transports: ['websocket'],
@@ -316,20 +254,27 @@ function initSocketIO() {
 
     socket.on('connect', function() {
         console.log('✅ Socket.IO connesso');
-        document.getElementById('connectionDot').classList.add('connected');
-        document.getElementById('statusText').textContent = 'Connesso';
+        const dot = document.getElementById('connectionDot');
+        const text = document.getElementById('statusText');
+        if (dot) dot.classList.add('connected');
+        if (text) text.textContent = 'Connesso';
     });
 
     socket.on('disconnect', function() {
         console.log('⚠️ Socket.IO disconnesso');
-        document.getElementById('connectionDot').classList.remove('connected');
-        document.getElementById('statusText').textContent = 'Disconnesso';
+        const dot = document.getElementById('connectionDot');
+        const text = document.getElementById('statusText');
+        if (dot) dot.classList.remove('connected');
+        if (text) text.textContent = 'Disconnesso';
     });
 
     socket.on('new_heart_rate', function(data) {
+        console.log('📡 Dati ricevuti:', data);
         const bpm = data.heart_rate;
-        document.getElementById('currentBpm').textContent = bpm;
-        document.getElementById('lastUpdate').textContent = 'Aggiornato ora';
+        const bpmEl = document.getElementById('currentBpm');
+        const updateEl = document.getElementById('lastUpdate');
+        if (bpmEl) bpmEl.textContent = bpm;
+        if (updateEl) updateEl.textContent = 'Aggiornato ora';
         addDataToChart(bpm);
         if (data.latitude && data.longitude) {
             updateMapPosition(data.latitude, data.longitude);
@@ -342,17 +287,21 @@ function initSocketIO() {
     });
 }
 
-// Inizializzazione
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Inizializzazione dashboard...');
-    initChart();
-    initMap();
-    initSocketIO();
-    loadStats();
-    loadHistoricalData();
-    setInterval(loadStats, 30000);
-    if (typeof lucide !== 'undefined') {
-        lucide.createIcons();
-    }
-    console.log('✅ Dashboard pronta');
+    
+    setTimeout(() => {
+        initChart();
+        initMap();
+        initSocketIO();
+        loadStats();
+        loadHistoricalData();
+        setInterval(loadStats, 30000);
+        
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+        
+        console.log('✅ Dashboard pronta');
+    }, 100);
 });
