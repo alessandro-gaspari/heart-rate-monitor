@@ -165,7 +165,7 @@ function initMap() {
                 box-shadow: 0 6px 25px rgba(255, 215, 0, 0.7);
                 display: flex; align-items: center; justify-content: center;
                 transition: all 0.3s ease; font-weight: bold; font-size: 36px;">
-                ⦿
+                ⌖
             </button>
         `;
         const btn = div.querySelector('button');
@@ -190,7 +190,7 @@ function initMap() {
         .marker-dot {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 20px; height: 20px; background: #FFD700; border: 4px solid white;
-            border-radius: 50%; box-shadow: 0 0 20px rgba(255, 215, 0, 1); z-index: 1000;
+            border-radius: 100%; box-shadow: 0 0 20px rgba(255, 215, 0, 1); z-index: 1000;
         }
         @keyframes pulse {
             0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
