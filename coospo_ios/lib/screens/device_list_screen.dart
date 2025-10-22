@@ -141,7 +141,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
     _checkGPS();
     
     _radarController = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(seconds: 1),
       vsync: this,
     );
   }
@@ -258,23 +258,19 @@ class _DeviceListScreenState extends State<DeviceListScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E21),
+      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E21),
+        backgroundColor: const Color.fromARGB(255, 0, 0, 0),
         elevation: 0,
-        title: const Text(
-          'Dispositivi Bluetooth',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-          ),
+        title: Image.asset(
+          'assets/craiyon_105658_image.png',
+          height: 130,
         ),
         centerTitle: true,
         actions: [
           PopupMenuButton<String>(
-            icon: const Icon(Icons.menu, color: Colors.white, size: 28),
-            color: const Color(0xFF1E293B),
+            icon: const Icon(Icons.menu, color: Color.fromARGB(255,255,210,31), size: 28),
+            color: const Color.fromARGB(255,30,30,30),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
@@ -294,12 +290,12 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                 value: 'archive',
                 child: Row(
                   children: [
-                    Icon(Icons.history, color: Color(0xFFFC5200), size: 24),
+                    Icon(Icons.run_circle_outlined, color: Color.fromARGB(255, 255, 210, 31), size: 24),
                     SizedBox(width: 12),
                     Text(
                       'Registro Attività',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: Color.fromARGB(255, 255, 210, 31),
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                         fontFamily: 'SF Pro Display',
@@ -347,14 +343,14 @@ class _DeviceListScreenState extends State<DeviceListScreen>
             child: ElevatedButton(
               onPressed: _isScanning ? null : _startScan,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isScanning ? Colors.grey.shade700 : const Color(0xFF1E90FF),
-                foregroundColor: Colors.white,
+                backgroundColor: _isScanning ? const Color.fromARGB(255, 0, 0, 0) : const Color.fromARGB(255,255,210,31),
+                foregroundColor: const Color.fromARGB(255, 0, 0, 0),
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
                 elevation: 8,
-                shadowColor: _isScanning ? Colors.transparent : const Color(0xFF1E90FF).withOpacity(0),
+                shadowColor: _isScanning ? const Color.fromARGB(30, 0, 0, 0) : const Color.fromARGB(255,255,210,31),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -363,7 +359,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                     turns: _radarController,
                     child: Icon(
                       Icons.radar,
-                      size: 26,
+                      size: 30,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -380,13 +376,6 @@ class _DeviceListScreenState extends State<DeviceListScreen>
             ),
           ),
           
-          if (_isScanning) ...[
-            const SizedBox(height: 30),
-            const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1E90FF)),
-              strokeWidth: 4,
-            ),
-          ],
           
           const SizedBox(height: 20),
           
@@ -399,14 +388,14 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                         Icon(
                           Icons.bluetooth_searching,
                           size: 100,
-                          color: Colors.white.withOpacity(0.3),
+                          color: const Color.fromARGB(255, 255, 210, 31),
                         ),
                         const SizedBox(height: 20),
                         Text(
                           'Nessun dispositivo trovato',
                           style: TextStyle(
                             fontSize: 20,
-                            color: Colors.white.withOpacity(0.6),
+                            color: const Color.fromARGB(255, 255, 210, 31),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -415,7 +404,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                           'Premi il pulsante per iniziare',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white.withOpacity(0.4),
+                            color: const Color.fromARGB(255, 255, 210, 31),
                           ),
                         ),
                       ],
@@ -439,7 +428,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                           gradient: LinearGradient(
                             colors: isCoospo
                                 ? [color.withOpacity(0.3), color.withOpacity(0.1)]
-                                : [const Color(0xFF1D1E33), const Color(0xFF1D1E33)],
+                                : [const Color.fromARGB(255, 30, 30, 30), const Color.fromARGB(255, 30, 30, 30)],
                           ),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
@@ -460,11 +449,11 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                                   Container(
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      color: color,
+                                      color: const Color.fromARGB(255, 255, 210, 31),
                                       borderRadius: BorderRadius.circular(14),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: color.withOpacity(0.4),
+                                          color: Color.fromARGB(255, 255, 210, 31).withOpacity(0.4),
                                           blurRadius: 8,
                                           spreadRadius: 2,
                                         ),
@@ -472,7 +461,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                                     ),
                                     child: Icon(
                                       icon,
-                                      color: Colors.white,
+                                      color: const Color.fromARGB(255, 30, 30, 30),
                                       size: 32,
                                     ),
                                   ),
@@ -517,7 +506,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                                   ),
                                   Icon(
                                     Icons.arrow_forward_ios,
-                                    color: isCoospo ? color : Colors.white.withOpacity(0.3),
+                                    color: isCoospo ? color : Colors.white.withOpacity(0.7),
                                     size: 22,
                                   ),
                                 ],

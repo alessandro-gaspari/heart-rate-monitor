@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request
-from flask_socketio import SocketIO, emit
-from flask_cors import CORS
+from flask_socketio import SocketIO, emit # type: ignore
+from flask_cors import CORS # type: ignore
 import sqlite3
 import base64
 import os
@@ -457,6 +457,37 @@ def get_activities():
     except Exception as e:
         print(f"❌ Errore get activities: {e}")
         return jsonify([]), 500
+    
+# API: Elimina attività
+@app.route('/api/activity/<int:activity_id>', methods=['DELETE'])
+def delete_activity(activity_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Elimina waypoints associati
+        cursor.execute('DELETE FROM waypoints WHERE activity_id = ?', (activity_id,))
+        
+        # Elimina attività
+        cursor.execute('DELETE FROM activities WHERE id = ?', (activity_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Attività {activity_id} eliminata dal database")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Attività {activity_id} eliminata'
+        })
+        
+    except Exception as e:
+        print(f"❌ Errore eliminazione attività: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 # ========== SOCKET.IO HANDLERS ==========
 

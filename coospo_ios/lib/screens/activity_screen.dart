@@ -23,26 +23,51 @@ class ActivityScreen extends StatefulWidget {
 
 class _ActivityScreenState extends State<ActivityScreen> {
   AppleMapController? mapController;
-  
-  // Stats
+
   DateTime startTime = DateTime.now();
   double totalDistance = 0.0;
   int currentHeartRate = 0;
   double avgSpeed = 0.0;
   int calories = 0;
-  
-  // Route tracking
+  LatLng? currentPosition;
+
   List<LatLng> routePoints = [];
   LatLng? lastPosition;
-  
-  // Subscriptions
+
   StreamSubscription<int>? hrSubscription;
   StreamSubscription<LatLng>? posSubscription;
+
+  bool hasCenteredMap = false;
 
   @override
   void initState() {
     super.initState();
+    _getInitialPosition();
     _startListening();
+  }
+
+  Future<void> _getInitialPosition() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.best,
+      );
+      currentPosition = LatLng(position.latitude, position.longitude);
+
+      // Se la mappa è già creata, centra subito
+      if (mapController != null && mounted) {
+        mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: currentPosition!,
+              zoom: 17,
+            ),
+          ),
+        );
+      }
+      setState(() {});
+    } catch (e) {
+      print('❌ Errore nel prendere posizione iniziale: $e');
+    }
   }
 
   @override
@@ -53,7 +78,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
   }
 
   void _startListening() {
-    // Listen heart rate
     hrSubscription = widget.heartRateStream.listen((hr) {
       if (mounted) {
         setState(() {
@@ -62,13 +86,11 @@ class _ActivityScreenState extends State<ActivityScreen> {
       }
     });
 
-    // Listen position
     posSubscription = widget.positionStream.listen((pos) {
       if (mounted) {
         setState(() {
           routePoints.add(pos);
-          
-          // Calcola distanza incrementale
+
           if (lastPosition != null) {
             final distance = Geolocator.distanceBetween(
               lastPosition!.latitude,
@@ -76,27 +98,34 @@ class _ActivityScreenState extends State<ActivityScreen> {
               pos.latitude,
               pos.longitude,
             );
-            totalDistance += distance / 1000; // km
-            
-            // Calcola velocità media (min/km)
+            totalDistance += distance / 1000;
+
             final elapsed = DateTime.now().difference(startTime).inMinutes;
             if (totalDistance > 0 && elapsed > 0) {
               avgSpeed = elapsed / totalDistance;
             }
-            
-            // Calorie approssimative
+
             calories = (totalDistance * 70).round();
           }
-          
+
           lastPosition = pos;
-          
-          // Centra mappa sulla posizione
-          if (mapController != null && routePoints.length % 5 == 0) {
-            mapController!.animateCamera(
-              CameraUpdate.newCameraPosition(
-                CameraPosition(target: pos, zoom: 17),
-              ),
-            );
+
+          if (mapController != null) {
+            if (!hasCenteredMap) {
+              mapController!.animateCamera(
+                CameraUpdate.newCameraPosition(
+                  CameraPosition(target: pos, zoom: 17),
+                ),
+              );
+              hasCenteredMap = true;
+            } else {
+              // Opzionale: puoi rimuovere questa animazione continua o gestirla diversamente
+              mapController!.animateCamera(
+                CameraUpdate.newCameraPosition(
+                  CameraPosition(target: pos, zoom: 17),
+                ),
+              );
+            }
           }
         });
       }
@@ -127,108 +156,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 color: Colors.black.withOpacity(0.5),
                 blurRadius: 30,
                 spreadRadius: 5,
-              ),
+              )
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.pause_circle_outline, color: Colors.orange, size: 60),
-              const SizedBox(height: 20),
-              const Text(
-                'VUOI FERMARE\nL\'ATTIVITÀ?',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  fontFamily: 'SF Pro Display',
-                  height: 1.2,
-                ),
-              ),
-              const SizedBox(height: 30),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF1744),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                      child: const Text(
-                        'NO',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        Navigator.pop(context); // Chiudi dialog
-                        
-                        // Chiama stop activity sul parent
-                        widget.onStopActivity(widget.activityId);
-                        
-                        // Chiudi ActivityScreen e torna a device_detail
-                        Navigator.pop(context);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00C853),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                      ),
-                      child: const Text(
-                        'SÌ',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.all(30),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.5),
-                blurRadius: 30,
-                spreadRadius: 5,
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.pause_circle_outline, color: Colors.orange, size: 60),
+              const Icon(Icons.pause_circle_outline, color: Color(0xFFFF1744), size: 60),
               const SizedBox(height: 20),
               const Text(
                 'VUOI FERMARE\nL\'ATTIVITÀ?',
@@ -268,9 +202,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.pop(context); // Chiudi dialog
+                        Navigator.pop(context);
                         widget.onStopActivity(widget.activityId);
-                        Navigator.pop(context); // Chiudi ActivityScreen
+                        Navigator.pop(context);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF00C853),
@@ -290,7 +224,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ),
                   ),
                 ],
-              ),
+              )
             ],
           ),
         ),
@@ -304,9 +238,26 @@ class _ActivityScreenState extends State<ActivityScreen> {
       backgroundColor: const Color(0xFF0A0E21),
       body: Stack(
         children: [
-          // MAPPA FULL SCREEN
           AppleMap(
-            onMapCreated: (controller) => mapController = controller,
+            onMapCreated: (controller) {
+              mapController = controller;
+
+              if (currentPosition != null) {
+                controller.animateCamera(
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(target: currentPosition!, zoom: 17),
+                  ),
+                );
+
+              } else if (lastPosition != null) {
+                controller.animateCamera(
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(target: lastPosition!, zoom: 17),
+                  ),
+                );
+                hasCenteredMap = true;
+              }
+            },
             initialCameraPosition: CameraPosition(
               target: lastPosition ?? const LatLng(45.4642, 9.19),
               zoom: 17,
@@ -321,11 +272,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   points: routePoints,
                   color: Colors.orange,
                   width: 6,
-                ),
+                )
             },
           ),
-          
-          // TOP STATS CARD
           Positioned(
             top: 60,
             left: 16,
@@ -335,18 +284,17 @@ class _ActivityScreenState extends State<ActivityScreen> {
               decoration: BoxDecoration(
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.orange, width: 2),
+                border: Border.all(color: const Color.fromARGB(255, 255, 210, 31), width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.orange.withOpacity(0.3),
+                    color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.3),
                     blurRadius: 15,
                     spreadRadius: 2,
-                  ),
+                  )
                 ],
               ),
               child: Column(
                 children: [
-                  // Durata principale
                   Text(
                     _formatDuration(),
                     style: const TextStyle(
@@ -358,8 +306,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  
-                  // Grid stats
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -373,54 +319,51 @@ class _ActivityScreenState extends State<ActivityScreen> {
               ),
             ),
           ),
-          
-          // STOP BUTTON
           Positioned(
             bottom: 50,
             left: 0,
             right: 0,
             child: Center(
-              child: GestureDetector(
-                onTap: _stopActivity,
-                child: Container(
-                  width: 200,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFFFF1744), Color(0xFFD50000)],
-                    ),
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFF1744).withOpacity(0.6),
-                        blurRadius: 30,
-                        spreadRadius: 5,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
+                child: GestureDetector(
+              onTap: _stopActivity,
+              child: Container(
+                width: 200,
+                height: 60,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFFFF1744), Color(0xFFD50000)],
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.stop_rounded, color: Colors.white, size: 32),
-                      SizedBox(width: 12),
-                      Text(
-                        'STOP',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 4,
-                          fontFamily: 'SF Pro Display',
-                        ),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFF1744).withOpacity(0.6),
+                      blurRadius: 30,
+                      spreadRadius: 5,
+                      offset: const Offset(0, 8),
+                    )
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.stop_rounded, color: Colors.white, size: 32),
+                    SizedBox(width: 12),
+                    Text(
+                      'STOP',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 4,
+                        fontFamily: 'SF Pro Display',
                       ),
-                    ],
-                  ),
+                    )
+                  ],
                 ),
               ),
-            ),
+            )),
           ),
         ],
       ),
@@ -453,7 +396,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
             fontWeight: FontWeight.w600,
             letterSpacing: 1,
           ),
-        ),
+        )
       ],
     );
   }

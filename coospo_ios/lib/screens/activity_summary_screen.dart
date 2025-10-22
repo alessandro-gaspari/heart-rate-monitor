@@ -135,7 +135,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
   Widget build(BuildContext context) {
     if (isLoading) {
       return Scaffold(
-        backgroundColor: const Color(0xFF0A0E21),
+        backgroundColor: const Color.fromARGB(255, 0, 0, 0),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -153,9 +153,9 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E21),
+      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E21),
+        backgroundColor: const Color.fromARGB(255, 0, 0, 0),
         elevation: 0,
         title: const Text(
           'Riepilogo Attività',
@@ -184,7 +184,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFFC5200).withOpacity(0.3),
+                    color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.6),
                     blurRadius: 15,
                     spreadRadius: 2,
                   ),
@@ -208,6 +208,15 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
                               ),
                             );
                           }
+
+                          if (routePoints.isNotEmpty) {
+                            controller.animateCamera(
+                              CameraUpdate.newLatLngBounds(
+                                _calculateBounds(routePoints),
+                                50,
+                              ), 
+                            );
+                          }
                         },
                         initialCameraPosition: CameraPosition(
                           target: routePoints.isNotEmpty 
@@ -217,6 +226,9 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
                         ),
                         polylines: Set.from(_buildColoredPolylines()),
                         myLocationEnabled: false,
+                        rotateGesturesEnabled: true,
+                        scrollGesturesEnabled: true,
+                        zoomGesturesEnabled: true,
                       ),
               ),
             ),
@@ -240,7 +252,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
             
             // STATISTICHE
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 2),
               child: Column(
                 children: [
                   _buildStatCard(
@@ -285,7 +297,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
                     Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFC5200),
+                    backgroundColor: const Color.fromARGB(255, 255, 210, 31),
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
@@ -298,6 +310,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
                       fontWeight: FontWeight.w900,
                       letterSpacing: 3,
                       fontFamily: 'SF Pro Display',
+                      color: Colors.black,
                     ),
                   ),
                 ),

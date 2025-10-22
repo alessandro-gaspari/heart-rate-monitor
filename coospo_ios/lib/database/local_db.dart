@@ -1,148 +1,126 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 class LocalDatabase {
-  static Database? _database;
-  
-  static Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
-  }
-  
-  static Future<Database> _initDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'coospo_local.db');
-    
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        // Tabella attività locali
-        await db.execute('''
-          CREATE TABLE activities (
-            id INTEGER PRIMARY KEY,
-            device_id TEXT NOT NULL,
-            start_time TEXT NOT NULL,
-            end_time TEXT,
-            distance_km REAL DEFAULT 0,
-            avg_speed REAL DEFAULT 0,
-            avg_heart_rate INTEGER DEFAULT 0,
-            calories REAL DEFAULT 0,
-            status TEXT DEFAULT 'completed',
-            synced INTEGER DEFAULT 0
-          )
-        ''');
-        
-        // Tabella waypoints locali
-        await db.execute('''
-          CREATE TABLE waypoints (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            activity_id INTEGER NOT NULL,
-            latitude REAL NOT NULL,
-            longitude REAL NOT NULL,
-            heart_rate INTEGER,
-            timestamp TEXT NOT NULL,
-            FOREIGN KEY (activity_id) REFERENCES activities (id)
-          )
-        ''');
-        
-        print('✅ Database locale creato');
-      },
-    );
-  }
+  static const String _activitiesKey = 'activities_cache';
+  static const String _waypointsKey = 'waypoints_cache';
   
   // Salva attività in locale
   static Future<void> saveActivity(Map<String, dynamic> activity) async {
-    final db = await database;
+    final prefs = await SharedPreferences.getInstance();
     
-    await db.insert(
-      'activities',
-      activity,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    // Carica attività esistenti
+    final activitiesJson = prefs.getString(_activitiesKey) ?? '[]';
+    final activities = List<Map<String, dynamic>>.from(json.decode(activitiesJson));
     
-    print('✅ Attività salvata in locale: ${activity['id']}');
+    // Rimuovi duplicati (stesso ID)
+    activities.removeWhere((a) => a['id'] == activity['id']);
+    
+    // Aggiungi nuova attività
+    activities.add(activity);
+    
+    // Salva
+    await prefs.setString(_activitiesKey, json.encode(activities));
+    
+    print('✅ Attività ${activity['id']} salvata in cache');
   }
   
   // Salva waypoints in locale
   static Future<void> saveWaypoints(int activityId, List<Map<String, dynamic>> waypoints) async {
-    final db = await database;
+    final prefs = await SharedPreferences.getInstance();
     
-    for (var waypoint in waypoints) {
-      await db.insert(
-        'waypoints',
-        {
-          'activity_id': activityId,
-          'latitude': waypoint['latitude'],
-          'longitude': waypoint['longitude'],
-          'heart_rate': waypoint['heart_rate'],
-          'timestamp': waypoint['timestamp'],
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
+    // Carica waypoints esistenti
+    final waypointsJson = prefs.getString(_waypointsKey) ?? '{}';
+    final allWaypoints = Map<String, dynamic>.from(json.decode(waypointsJson));
     
-    print('✅ ${waypoints.length} waypoints salvati in locale');
+    // Salva waypoints per questa attività
+    allWaypoints[activityId.toString()] = waypoints;
+    
+    // Salva
+    await prefs.setString(_waypointsKey, json.encode(allWaypoints));
+    
+    print('✅ ${waypoints.length} waypoints salvati per attività $activityId');
   }
   
   // Ottieni attività dal locale per device_id
   static Future<List<Map<String, dynamic>>> getActivitiesByDevice(String deviceId) async {
-    final db = await database;
+    final prefs = await SharedPreferences.getInstance();
     
-    final activities = await db.query(
-      'activities',
-      where: 'device_id = ? AND status = ?',
-      whereArgs: [deviceId, 'completed'],
-      orderBy: 'start_time DESC',
-    );
+    final activitiesJson = prefs.getString(_activitiesKey) ?? '[]';
+    final allActivities = List<Map<String, dynamic>>.from(json.decode(activitiesJson));
     
-    return activities;
+    // Filtra per device_id
+    final filtered = allActivities.where((a) => 
+      a['device_id'] == deviceId && a['status'] == 'completed'
+    ).toList();
+    
+    // Ordina per data (più recenti prima)
+    filtered.sort((a, b) {
+      final dateA = DateTime.parse(a['start_time']);
+      final dateB = DateTime.parse(b['start_time']);
+      return dateB.compareTo(dateA);
+    });
+    
+    return filtered;
   }
   
   // Ottieni waypoints per attività
   static Future<List<Map<String, dynamic>>> getWaypoints(int activityId) async {
-    final db = await database;
+    final prefs = await SharedPreferences.getInstance();
     
-    final waypoints = await db.query(
-      'waypoints',
-      where: 'activity_id = ?',
-      whereArgs: [activityId],
-      orderBy: 'timestamp ASC',
-    );
+    final waypointsJson = prefs.getString(_waypointsKey) ?? '{}';
+    final allWaypoints = Map<String, dynamic>.from(json.decode(waypointsJson));
     
-    return waypoints;
+    if (allWaypoints.containsKey(activityId.toString())) {
+      return List<Map<String, dynamic>>.from(allWaypoints[activityId.toString()]);
+    }
+    
+    return [];
   }
   
   // Ottieni singola attività con waypoints
   static Future<Map<String, dynamic>?> getActivityWithWaypoints(int activityId) async {
-    final db = await database;
+    final prefs = await SharedPreferences.getInstance();
     
-    final activities = await db.query(
-      'activities',
-      where: 'id = ?',
-      whereArgs: [activityId],
-    );
+    final activitiesJson = prefs.getString(_activitiesKey) ?? '[]';
+    final allActivities = List<Map<String, dynamic>>.from(json.decode(activitiesJson));
     
-    if (activities.isEmpty) return null;
-    
-    final activity = Map<String, dynamic>.from(activities.first);
-    final waypoints = await getWaypoints(activityId);
-    
-    activity['waypoints'] = waypoints;
-    
-    return activity;
+    try {
+      final activity = allActivities.firstWhere((a) => a['id'] == activityId);
+      final waypoints = await getWaypoints(activityId);
+      
+      activity['waypoints'] = waypoints;
+      
+      return activity;
+    } catch (e) {
+      return null;
+    }
   }
   
-  // Segna attività come sincronizzata
-  static Future<void> markAsSynced(int activityId) async {
-    final db = await database;
+  // NUOVO: Elimina attività
+  static Future<void> deleteActivity(int activityId) async {
+    final prefs = await SharedPreferences.getInstance();
     
-    await db.update(
-      'activities',
-      {'synced': 1},
-      where: 'id = ?',
-      whereArgs: [activityId],
-    );
+    // Rimuovi attività
+    final activitiesJson = prefs.getString(_activitiesKey) ?? '[]';
+    final activities = List<Map<String, dynamic>>.from(json.decode(activitiesJson));
+    activities.removeWhere((a) => a['id'] == activityId);
+    await prefs.setString(_activitiesKey, json.encode(activities));
+    
+    // Rimuovi waypoints
+    final waypointsJson = prefs.getString(_waypointsKey) ?? '{}';
+    final allWaypoints = Map<String, dynamic>.from(json.decode(waypointsJson));
+    allWaypoints.remove(activityId.toString());
+    await prefs.setString(_waypointsKey, json.encode(allWaypoints));
+    
+    print('✅ Attività $activityId eliminata dalla cache');
+  }
+  
+  // Pulisci cache (opzionale)
+  static Future<void> clearCache() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_activitiesKey);
+    await prefs.remove(_waypointsKey);
+    print('✅ Cache pulita');
   }
 }

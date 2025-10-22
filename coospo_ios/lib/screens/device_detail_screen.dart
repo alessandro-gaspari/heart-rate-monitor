@@ -30,8 +30,8 @@ Color getCoospoColor(CoospoDeviceType type) {
   switch (type) {
     case CoospoDeviceType.heartRateBand: return const Color(0xFFFF4444);
     case CoospoDeviceType.armband: return const Color(0xFFFF8C00);
-    case CoospoDeviceType.unknown: return const Color(0xFF9B59B6);
-    default: return const Color(0xFF3498DB);
+    case CoospoDeviceType.unknown: return const Color.fromARGB(255,255,210,31);
+    default: return const Color.fromARGB(255,255,210,31);
   }
 }
 
@@ -138,6 +138,16 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       
       if (mounted) {
         setState(() => currentPosition = LatLng(pos.latitude, pos.longitude));
+        if (mapController != null) {
+          mapController!.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(
+                target: LatLng(pos.latitude, pos.longitude),
+                zoom: 17.0,
+              ),
+            ),
+          );
+        }
       }
 
       positionStream = Geolocator.getPositionStream(
@@ -409,7 +419,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       await widget.device.connect();
       setState(() => isConnected = true);
       
-      // SALVA DEVICE ID
+      // SALVA DEVICE ID IN SHARED PREFERENCES
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_device_id', widget.device.platformName);
       print("✅ Device ID salvato: ${widget.device.platformName}");
@@ -419,7 +429,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       setState(() => isConnected = false);
     }
   }
-
 
   Future<void> _disconnect() async {
     print('🔴 DISCONNESSIONE');
@@ -560,9 +569,9 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     final signalIcon = _getSignalIcon();
     
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E21),
+      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E21),
+        backgroundColor: const Color.fromARGB(255, 0, 0, 0),
         elevation: 0,
         title: Text(
           widget.device.platformName.isEmpty ? 'Dispositivo' : widget.device.platformName,
@@ -610,7 +619,21 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: AppleMap(
-                        onMapCreated: (controller) => mapController = controller,
+                        onMapCreated: (controller) {
+                          mapController = controller;
+                          
+                          // AUTO-CENTER sulla posizione attuale
+                          if (currentPosition != null) {
+                            controller.animateCamera(
+                              CameraUpdate.newCameraPosition(
+                                CameraPosition(
+                                  target: currentPosition!,
+                                  zoom: 17.0,
+                                ),
+                              ),
+                            );
+                          }
+                        },
                         initialCameraPosition: CameraPosition(
                           target: currentPosition ?? const LatLng(45.4642, 9.19),
                           zoom: 16.0,
@@ -619,6 +642,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                         myLocationButtonEnabled: false,
                         compassEnabled: true,
                       ),
+
                     ),
                   ),
                   Positioned(
@@ -631,7 +655,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                         boxShadow: [BoxShadow(color: deviceColor.withOpacity(0.6), blurRadius: 12, spreadRadius: 2)],
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.my_location, color: Colors.white),
+                        icon: const Icon(Icons.my_location, color: Color.fromARGB(255, 0, 0, 0)),
                         iconSize: 24,
                         onPressed: _refreshGPS,
                       ),
@@ -649,10 +673,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(isMapExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                        color: Colors.white54, size: 28),
+                        color: const Color.fromARGB(206, 255, 255, 255), size: 28),
                       const SizedBox(width: 8),
                       Text(isMapExpanded ? 'Comprimi' : 'Espandi',
-                        style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                        style: const TextStyle(color: Color.fromARGB(206, 255, 255, 255), fontSize: 14)),
                     ],
                   ),
                 ),
@@ -677,7 +701,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                                 shape: BoxShape.circle,
                                 boxShadow: [BoxShadow(color: deviceColor.withOpacity(0.4), blurRadius: 30, spreadRadius: 5)],
                               ),
-                              child: const Center(child: Text('❤️', style: TextStyle(fontSize: 60))),
+                              child: const Center(child: Text('💛', style: TextStyle(fontSize: 80))),
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -688,15 +712,15 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                           
                           if (!isConnected)
                             _buildButton(label: 'CONNETTI', icon: Icons.bluetooth_connected, 
-                              color: deviceColor, onPressed: _connectToDevice),
+                              color: const Color.fromARGB(255, 30, 30, 30), onPressed: _connectToDevice),
                           
                           if (isConnected) ...[
-                            _buildButton(label: 'START ATTIVITÀ', icon: Icons.play_arrow,
+                            _buildButton(label: 'AVVIA ATTIVITÀ', icon: Icons.play_arrow,
                               color: Colors.green, onPressed: _startActivity, size: 18),
                             const SizedBox(height: 12),
-                            _buildButton(label: isStreaming ? 'STOP STREAM' : 'START STREAM',
+                            _buildButton(label: isStreaming ? 'FERMA STREAM' : 'AVVIA STREAM',
                               icon: isStreaming ? Icons.stop_circle : Icons.cloud_upload,
-                              color: isStreaming ? Colors.red : deviceColor,
+                              color: isStreaming ? Colors.red : const Color.fromARGB(255, 78, 0, 109),
                               onPressed: isStreaming ? _stopStreaming : _startStreaming),
                             const SizedBox(height: 12),
                             SizedBox(
@@ -871,7 +895,7 @@ class __CountdownDialogState extends State<_CountdownDialog>
                 boxShadow: [
                   BoxShadow(
                     color: countdown > 0 
-                      ? const Color(0xFFFC5200).withOpacity(0.7)
+                      ? const Color.fromARGB(255,255,210,31).withOpacity(0.7)
                       : const Color(0xFF00FF87).withOpacity(0.7),
                     blurRadius: 100,
                     spreadRadius: 30,
@@ -882,7 +906,7 @@ class __CountdownDialogState extends State<_CountdownDialog>
                 ? Text(
                     '$countdown',
                     style: TextStyle(
-                      color: const Color(0xFFFC5200),
+                      color: const Color.fromARGB(255,255,210,31),
                       fontSize: 200,
                       fontWeight: FontWeight.w900,
                       fontFamily: 'SF Pro Display',
