@@ -202,7 +202,7 @@ body {
 }
 
 .logo img {
-    max-height: 70px; /* Ridotto da 100px a 70px */
+    max-height: 100px; /* Ridotto da 100px a 70px */
     width: auto;
     filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
 }
@@ -400,12 +400,6 @@ body {
 .leaflet-div-icon {
     background: transparent !important;
     border: none !important;
-}
-
-
-/* Filtro per rendere le tiles con strade gialle */
-.leaflet-tile-pane {
-    filter: brightness(0.6) contrast(1.4) saturate(0.2) hue-rotate(40deg);
 }
 
 /* Oppure usa questo filtro per un effetto più giallo */
@@ -621,7 +615,7 @@ body {
     }
     
     .logo img {
-        max-height: 70px; /* Ridotto da 100px a 70px */
+        max-height: 100; /* Ridotto da 100px a 70px */
         width: auto;
         filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
     }
