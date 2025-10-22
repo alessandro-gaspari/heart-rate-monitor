@@ -3,23 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Heart Rate Monitor</title>
+    <meta name="description" content="Real-time Heart Rate Monitor Dashboard con GPS tracking">
+    <title>Heart Rate Monitor - Live Dashboard</title>
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
-    
-    <!-- Socket.IO -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
@@ -32,12 +25,11 @@
     <header class="header glass">
         <div class="header-content">
             <div class="logo">
-                <i data-lucide="heart-pulse" class="logo-icon"></i>
-                <h1>Heart Rate Monitor</h1>
+                <img src="{{ url_for('static', filename='logo.png') }}" alt="Heart Rate Monitor Logo">
             </div>
             <div class="connection-status">
                 <span class="status-dot" id="connectionDot"></span>
-                <span id="statusText">Connessione...</span>
+                <span id="statusText">In attesa...</span>
             </div>
         </div>
     </header>
@@ -49,7 +41,7 @@
         <div class="bpm-card glass">
             <div class="bpm-header">
                 <i data-lucide="activity" class="bpm-icon"></i>
-                <span class="live-badge">LIVE</span>
+                <span class="live-badge">🔴 LIVE</span>
             </div>
             <div class="bpm-display">
                 <div class="heart-animation">❤️</div>
@@ -65,7 +57,7 @@
         <!-- Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card glass">
-                <div class="stat-icon green">
+                <div class="stat-icon yellow">
                     <i data-lucide="trending-up"></i>
                 </div>
                 <div class="stat-content">
@@ -78,7 +70,7 @@
             </div>
 
             <div class="stat-card glass">
-                <div class="stat-icon blue">
+                <div class="stat-icon green">
                     <i data-lucide="arrow-down"></i>
                 </div>
                 <div class="stat-content">
@@ -104,7 +96,7 @@
             </div>
 
             <div class="stat-card glass">
-                <div class="stat-icon purple">
+                <div class="stat-icon gold">
                     <i data-lucide="database"></i>
                 </div>
                 <div class="stat-content">
@@ -146,13 +138,14 @@
 
     </div>
 
-    <!-- Leaflet JS -->
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Custom JS -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
     
-    <!-- Initialize Lucide Icons -->
+    <!-- Initialize Icons -->
     <script>
         lucide.createIcons();
     </script>

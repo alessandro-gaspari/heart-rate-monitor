@@ -161,7 +161,7 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 0, 0, 0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E21),
+        backgroundColor: const Color.fromARGB(255, 30, 30, 30),
         elevation: 0,
         title: isSelectionMode
             ? Text(

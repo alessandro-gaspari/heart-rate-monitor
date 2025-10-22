@@ -388,14 +388,14 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                         Icon(
                           Icons.bluetooth_searching,
                           size: 100,
-                          color: const Color.fromARGB(255, 255, 210, 31),
+                          color: Colors.white30,
                         ),
                         const SizedBox(height: 20),
                         Text(
                           'Nessun dispositivo trovato',
                           style: TextStyle(
                             fontSize: 20,
-                            color: const Color.fromARGB(255, 255, 210, 31),
+                            color: Colors.white30,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -404,7 +404,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                           'Premi il pulsante per iniziare',
                           style: TextStyle(
                             fontSize: 16,
-                            color: const Color.fromARGB(255, 255, 210, 31),
+                            color: Colors.white30,
                           ),
                         ),
                       ],
