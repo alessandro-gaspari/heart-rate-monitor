@@ -154,21 +154,29 @@ function initMap() {
         iconSize: [60, 60],
         iconAnchor: [30, 30]
     });
-    
+
     marker = L.marker(lastKnownPosition, { icon: pulseIcon }).addTo(map);
 
     const centerBtn = L.control({ position: 'bottomright' });
     centerBtn.onAdd = function() {
-        const div = L.DomUtil.create('div', 'leaflet-bar');
-        div.style.cssText = 'margin-bottom: 20px; margin-right: 10px;';
+        const div = L.DomUtil.create('div', '');
+        div.style.cssText = 'margin-bottom: 20px; margin-right: 10px; background: transparent; border: none; box-shadow: none;';
         div.innerHTML = `
             <button title="Centra su GPS" style="
                 background: linear-gradient(135deg, #FFD700, #FFA500);
-                color: #000; border: none; width: 70px; height: 70px;
-                border-radius: 50%; cursor: pointer;
+                color: #000; 
+                border: none; 
+                width: 70px; 
+                height: 70px;
+                border-radius: 50%; 
+                cursor: pointer;
                 box-shadow: 0 6px 25px rgba(255, 215, 0, 0.7);
-                display: flex; align-items: center; justify-content: center;
-                transition: transform 0.3s ease; font-weight: bold; font-size: 36px;">
+                display: flex; 
+                align-items: center; 
+                justify-content: center;
+                transition: all 0.3s ease; 
+                font-weight: bold;
+                font-size: 36px;">
                 📍
             </button>
         `;
@@ -206,7 +214,7 @@ function initMap() {
             transform: translate(-50%, -50%);
             width: 80px; 
             height: 80px;
-            background: rgba(255, 215, 0, 0.3);
+            background: rgba(255, 215, 0, 0.4);
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
@@ -215,9 +223,13 @@ function initMap() {
             top: 50%; 
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 40px;
+            width: 20px;
+            height: 20px;
+            background: #FFD700;
+            border: 4px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 1);
             z-index: 1000;
-            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.8));
         }
         @keyframes pulse {
             0%, 100% { 
