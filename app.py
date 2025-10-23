@@ -296,63 +296,84 @@ def stop_activity():
     try:
         data = request.json
         activity_id = data.get('activity_id')
+        calories = data.get('calories', 0)
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Calcola statistiche
         cursor.execute('''
-            SELECT latitude, longitude FROM waypoints
+            SELECT 
+                AVG(heart_rate) as avg_hr,
+                MAX(heart_rate) as max_hr,
+                MIN(heart_rate) as min_hr,
+                COUNT(*) as total_waypoints
+            FROM waypoints 
             WHERE activity_id = ?
+        ''', (activity_id,))
+        
+        stats = cursor.fetchone()
+        
+        # Calcola distanza
+        cursor.execute('''
+            SELECT latitude, longitude 
+            FROM waypoints 
+            WHERE activity_id = ? 
             ORDER BY timestamp ASC
         ''', (activity_id,))
         
         waypoints = cursor.fetchall()
-        distance_km = calculate_distance(waypoints)
+        total_distance = 0
         
+        for i in range(1, len(waypoints)):
+            lat1, lon1 = waypoints[i-1]
+            lat2, lon2 = waypoints[i]
+            
+            # Formula Haversine
+            from math import radians, cos, sin, asin, sqrt
+            lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+            dlon = lon2 - lon1
+            dlat = lat2 - lat1
+            a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+            c = 2 * asin(sqrt(a))
+            km = 6371 * c
+            total_distance += km
+        
+        # Aggiorna attività
         cursor.execute('''
-            SELECT AVG(heart_rate), COUNT(*)
-            FROM waypoints
-            WHERE activity_id = ? AND heart_rate > 0
-        ''', (activity_id,))
-        
-        stats = cursor.fetchone()
-        avg_hr = round(stats[0]) if stats[0] else 0
-        
-        cursor.execute('''
-            SELECT 
-                (julianday(datetime('now')) - julianday(start_time)) * 24 * 60 as duration_minutes
-            FROM activities
-            WHERE id = ?
-        ''', (activity_id,))
-        
-        duration_minutes = cursor.fetchone()[0]
-        
-        avg_speed = (duration_minutes / distance_km) if distance_km > 0 else 0
-        calories = distance_km * 70
-        
-        cursor.execute('''
-            UPDATE activities
-            SET end_time = datetime('now'),
+            UPDATE activities 
+            SET 
+                end_time = ?,
                 distance_km = ?,
-                avg_speed = ?,
                 avg_heart_rate = ?,
+                max_heart_rate = ?,
+                min_heart_rate = ?,
                 calories = ?,
                 status = 'completed'
             WHERE id = ?
-        ''', (distance_km, avg_speed, avg_hr, calories, activity_id))
+        ''', (
+            datetime.now().isoformat(),
+            total_distance,
+            int(stats[0]) if stats[0] else 0,
+            int(stats[1]) if stats[1] else 0,
+            int(stats[2]) if stats[2] else 0,
+            calories,
+            activity_id
+        ))
         
         conn.commit()
         conn.close()
         
-        print(f"✅ Attività {activity_id} terminata: {distance_km:.2f}km, {avg_hr}bpm")
+        print(f"✅ Attività {activity_id} completata: {total_distance:.2f} km, {calories:.1f} kcal")
         
         return jsonify({
             'success': True,
-            'distance_km': round(distance_km, 2),
-            'avg_speed': round(avg_speed, 2),
-            'avg_heart_rate': avg_hr,
-            'calories': round(calories, 0),
-            'duration_minutes': round(duration_minutes, 2)
+            'activity_id': activity_id,
+            'distance_km': total_distance,
+            'avg_heart_rate': int(stats[0]) if stats[0] else 0,
+            'max_heart_rate': int(stats[1]) if stats[1] else 0,
+            'min_heart_rate': int(stats[2]) if stats[2] else 0,
+            'calories': calories
         })
         
     except Exception as e:

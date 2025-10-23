@@ -4,7 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'device_detail_screen.dart';
 import 'activities_archive_screen.dart';
-
+import 'profile_screen.dart';
 
 enum CoospoDeviceType { 
   none, 
@@ -283,6 +283,13 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                     builder: (context) => const ActivitiesArchiveScreen(),
                   ),
                 );
+              } else if (value == 'profiles') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProfilesScreen(),
+                  ),
+                );
               }
             },
             itemBuilder: (context) => [
@@ -304,10 +311,29 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                   ],
                 ),
               ),
+              const PopupMenuItem(
+                value: 'profiles',
+                child: Row(
+                  children: [
+                    Icon(Icons.person, color: Color.fromARGB(255, 255, 210, 31), size: 24),
+                    SizedBox(width: 12),
+                    Text(
+                      'Profili Utente',
+                      style: TextStyle(
+                        color: Color.fromARGB(255, 255, 210, 31),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        fontFamily: 'SF Pro Display',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(width: 8),
         ],
+
       ),
 
       body: Column(

@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../models/user_profile.dart';
+import '../database/profile_db.dart';
 
 class ActivityScreen extends StatefulWidget {
   final int activityId;
-  final Function(int activityId) onStopActivity;
+  final Function(int activityId, double calories) onStopActivity;
   final Stream<int> heartRateStream;
   final Stream<LatLng> positionStream;
 
@@ -28,7 +30,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   double totalDistance = 0.0;
   int currentHeartRate = 0;
   double avgSpeed = 0.0;
-  int calories = 0;
+  double calories = 0.0;
   LatLng? currentPosition;
 
   List<LatLng> routePoints = [];
@@ -36,14 +38,32 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   StreamSubscription<int>? hrSubscription;
   StreamSubscription<LatLng>? posSubscription;
+  Timer? caloriesTimer;
 
   bool hasCenteredMap = false;
+  UserProfile? activeProfile;
 
   @override
   void initState() {
     super.initState();
+    _loadActiveProfile();
     _getInitialPosition();
     _startListening();
+    _startCaloriesCalculation();
+  }
+
+  Future<void> _loadActiveProfile() async {
+    final profile = await ProfileDatabase.getActiveProfile();
+    if (mounted) {
+      setState(() {
+        activeProfile = profile;
+      });
+    }
+    if (profile == null) {
+      print('⚠️ Nessun profilo attivo - calorie non verranno calcolate');
+    } else {
+      print('✅ Profilo attivo caricato: ${profile.name}');
+    }
   }
 
   Future<void> _getInitialPosition() async {
@@ -53,7 +73,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
       );
       currentPosition = LatLng(position.latitude, position.longitude);
 
-      // Se la mappa è già creata, centra subito
       if (mapController != null && mounted) {
         mapController!.animateCamera(
           CameraUpdate.newCameraPosition(
@@ -74,6 +93,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   void dispose() {
     hrSubscription?.cancel();
     posSubscription?.cancel();
+    caloriesTimer?.cancel();
     super.dispose();
   }
 
@@ -98,14 +118,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
               pos.latitude,
               pos.longitude,
             );
-            totalDistance += distance / 1000;
+            totalDistance += distance / 1000; // in km
 
-            final elapsed = DateTime.now().difference(startTime).inMinutes;
+            final elapsed = DateTime.now().difference(startTime).inSeconds;
             if (totalDistance > 0 && elapsed > 0) {
-              avgSpeed = elapsed / totalDistance;
+              avgSpeed = (elapsed / 60) / totalDistance; // min/km
             }
-
-            calories = (totalDistance * 70).round();
           }
 
           lastPosition = pos;
@@ -119,7 +137,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
               );
               hasCenteredMap = true;
             } else {
-              // Opzionale: puoi rimuovere questa animazione continua o gestirla diversamente
               mapController!.animateCamera(
                 CameraUpdate.newCameraPosition(
                   CameraPosition(target: pos, zoom: 17),
@@ -130,6 +147,31 @@ class _ActivityScreenState extends State<ActivityScreen> {
         });
       }
     });
+  }
+
+  void _startCaloriesCalculation() {
+    caloriesTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _calculateCalories();
+    });
+  }
+
+  void _calculateCalories() {
+    if (activeProfile == null || totalDistance == 0) return;
+
+    final elapsed = DateTime.now().difference(startTime).inSeconds;
+    if (elapsed == 0) return;
+
+    // Velocità media in km/h
+    final avgSpeedKmh = (totalDistance / (elapsed / 3600));
+
+    // Formula: calorie = Distanza(km) * peso(kg) * ((0.035+0.029*(v.media/10))*Fs*Fe)
+    final calculatedCalories = activeProfile!.calculateCalories(totalDistance, avgSpeedKmh);
+
+    if (mounted) {
+      setState(() {
+        calories = calculatedCalories;
+      });
+    }
   }
 
   String _formatDuration() {
@@ -202,8 +244,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
+                        _calculateCalories(); // Calcolo finale
                         Navigator.pop(context);
-                        widget.onStopActivity(widget.activityId);
+                        widget.onStopActivity(widget.activityId, calories);
                         Navigator.pop(context);
                       },
                       style: ElevatedButton.styleFrom(
@@ -248,7 +291,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     CameraPosition(target: currentPosition!, zoom: 17),
                   ),
                 );
-
               } else if (lastPosition != null) {
                 controller.animateCamera(
                   CameraUpdate.newCameraPosition(
@@ -259,7 +301,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
               }
             },
             initialCameraPosition: CameraPosition(
-              target: lastPosition ?? const LatLng(45.4642, 9.19),
+              target: currentPosition ?? lastPosition ?? const LatLng(45.4642, 9.19),
               zoom: 17,
             ),
             myLocationEnabled: true,
@@ -270,11 +312,13 @@ class _ActivityScreenState extends State<ActivityScreen> {
                 Polyline(
                   polylineId: PolylineId('route'),
                   points: routePoints,
-                  color: Colors.orange,
+                  color: const Color(0xFFFC5200),
                   width: 6,
                 )
             },
           ),
+          
+          // Header con stats
           Positioned(
             top: 60,
             left: 16,
@@ -284,10 +328,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
               decoration: BoxDecoration(
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color.fromARGB(255, 255, 210, 31), width: 2),
+                border: Border.all(color: const Color(0xFFFC5200), width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.3),
+                    color: const Color(0xFFFC5200).withOpacity(0.3),
                     blurRadius: 15,
                     spreadRadius: 2,
                   )
@@ -309,61 +353,76 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildStat('📍', '${totalDistance.toStringAsFixed(2)}', 'km'),
+                      _buildStat('📍', totalDistance.toStringAsFixed(2), 'km'),
                       _buildStat('❤️', '$currentHeartRate', 'bpm'),
                       _buildStat('⚡', avgSpeed > 0 ? avgSpeed.toStringAsFixed(1) : '--', 'min/km'),
-                      _buildStat('🔥', '$calories', 'kcal'),
+                      _buildStat('🔥', calories.toStringAsFixed(0), 'kcal'),
                     ],
                   ),
+                  if (activeProfile != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        '👤 ${activeProfile!.name}',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
           ),
+          
+          // Bottone STOP
           Positioned(
             bottom: 50,
             left: 0,
             right: 0,
             child: Center(
-                child: GestureDetector(
-              onTap: _stopActivity,
-              child: Container(
-                width: 200,
-                height: 60,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFFFF1744), Color(0xFFD50000)],
+              child: GestureDetector(
+                onTap: _stopActivity,
+                child: Container(
+                  width: 200,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFFF1744), Color(0xFFD50000)],
+                    ),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFF1744).withOpacity(0.6),
+                        blurRadius: 30,
+                        spreadRadius: 5,
+                        offset: const Offset(0, 8),
+                      )
+                    ],
                   ),
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFF1744).withOpacity(0.6),
-                      blurRadius: 30,
-                      spreadRadius: 5,
-                      offset: const Offset(0, 8),
-                    )
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.stop_rounded, color: Colors.white, size: 32),
-                    SizedBox(width: 12),
-                    Text(
-                      'STOP',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 4,
-                        fontFamily: 'SF Pro Display',
-                      ),
-                    )
-                  ],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.stop_rounded, color: Colors.white, size: 32),
+                      SizedBox(width: 12),
+                      Text(
+                        'STOP',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                          fontFamily: 'SF Pro Display',
+                        ),
+                      )
+                    ],
+                  ),
                 ),
               ),
-            )),
+            ),
           ),
         ],
       ),

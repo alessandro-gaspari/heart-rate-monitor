@@ -96,7 +96,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     _listenToDeviceState();
     _startTracking();
   }
-
+  
   @override
   void dispose() {
     _heartRateStreamController.close();
@@ -105,13 +105,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     _heartbeatController.dispose();
     _stopBleReading();
     _stopStreaming();
-    _stopActivity();
+    
+    // Se c'è un'attività in corso, fermala senza calorie
+    if (currentActivityId != null) {
+      _stopActivity(currentActivityId!, 0.0);
+    }
+    
     _deviceStateSubscription?.cancel();
     positionStream?.cancel();
     waypointTimer?.cancel();
     super.dispose();
   }
-
   // ========== GPS TRACKING ==========
   
   void _startTracking() async {
@@ -312,23 +316,25 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     }
   }
 
-  Future<void> _stopActivity([int? activityId]) async {
-    final id = activityId ?? currentActivityId;
-    if (id == null) return;
-    
+  Future<void> _stopActivity(int activityId, double calories) async {
     try {
-      print("🛑 Arresto attività...");
+      print("🛑 Arresto attività $activityId con $calories kcal...");
       waypointTimer?.cancel();
       
       final response = await http.post(
         Uri.parse('$serverUrl/api/activity/stop'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'activity_id': id}),
+        body: json.encode({
+          'activity_id': activityId,
+          'calories': calories,
+        }),
       );
       
       if (response.statusCode == 200) {
-        // final stats = json.decode(response.body);
-        setState(() => isActivityRunning = false);
+        setState(() {
+          isActivityRunning = false;
+          currentActivityId = null;
+        });
         
         print("✅ Attività terminata, navigando alla summary...");
         
@@ -337,15 +343,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ActivitySummaryScreen(activityId: id),
+              builder: (context) => ActivitySummaryScreen(activityId: activityId),
             ),
           );
         }
       } else {
         print("❌ Errore server: ${response.statusCode}");
+        _showMessage('Errore server: ${response.statusCode}');
       }
     } catch (e) {
       print("❌ Errore stop activity: $e");
+      _showMessage('Errore: $e');
     }
   }
 
@@ -432,9 +440,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
 
   Future<void> _disconnect() async {
     print('🔴 DISCONNESSIONE');
+    
     if (isActivityRunning && currentActivityId != null) {
-      await _stopActivity(currentActivityId!);
+      // Disconnessione mentre attività in corso - ferma con calorie 0
+      await _stopActivity(currentActivityId!, 0.0);
     }
+    
     if (isStreaming) await _stopStreaming();
     
     await _characteristicSubscription?.cancel();
@@ -445,6 +456,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       isConnected = false;
       isStreaming = false;
       currentHeartRate = 0;
+      isActivityRunning = false;
+      currentActivityId = null;
     });
     
     try {
@@ -453,6 +466,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       print('❌ Errore disconnect: $e');
     }
   }
+
 
   Future<void> _startBleReading() async {
     try {
