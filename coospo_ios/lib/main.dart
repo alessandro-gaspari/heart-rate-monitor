@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'screens/device_list_screen.dart';
+import 'screens/welcome_profile_screen.dart';
+import 'database/profili_db.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,7 +19,6 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   
   @override
-
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
@@ -77,7 +78,87 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
         ),
       ),
-      home: const DeviceListScreen(),
+      home: const SplashScreen(), // ⭐ Cambiato da DeviceListScreen
+      routes: {
+        '/home': (context) => const DeviceListScreen(),
+        '/welcome': (context) => WelcomeProfileScreen(),
+      },
     );
   }
 }
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({Key? key}) : super(key: key);
+
+  @override
+  _SplashScreenState createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> 
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    )..repeat(reverse: true);
+    _checkProfile();
+  }
+
+  Future<void> _checkProfile() async {
+    await Future.delayed(const Duration(milliseconds: 800));
+    final profiles = await ProfileDatabase.getAllProfiles();
+    
+    if (mounted) {
+      if (profiles.isEmpty) {
+        Navigator.pushReplacementNamed(context, '/welcome');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+              ScaleTransition(
+                scale: Tween<double>(begin: 0.95, end: 1.05).animate(_controller),
+                child: Image.asset(
+                  'assets/craiyon_105658_image.png',
+                  height: 200,
+                ),
+              ),
+            const SizedBox(height: 50),
+            // Linear Progress Bar centrata, spessa e piccola
+            SizedBox(
+              width: 150, // Larghezza ridotta
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10), // Bordi arrotondati
+                child: LinearProgressIndicator(
+                  minHeight: 8, // Più spessa
+                  color: const Color.fromARGB(255, 255, 210, 31), // Giallo
+                  backgroundColor: Colors.white.withOpacity(0.2), // Sfondo trasparente
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}
+

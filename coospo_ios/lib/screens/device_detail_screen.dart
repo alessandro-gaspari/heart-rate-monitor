@@ -5,18 +5,17 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:geolocator/geolocator.dart';
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
-import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'activity_screen.dart';
 import 'activity_summary_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import '../database/local_db.dart';
 
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
 
 CoospoDeviceType getCoospoDeviceType(String deviceName) {
   deviceName = deviceName.toLowerCase();
   if (!deviceName.contains('coospo')) return CoospoDeviceType.none;
-  if (deviceName.contains('heart rate') || deviceName.contains('h6') || 
+  if (deviceName.contains('heart rate') || deviceName.contains('h6') ||
       deviceName.contains('h7') || deviceName.contains('808')) {
     return CoospoDeviceType.heartRateBand;
   }
@@ -28,10 +27,14 @@ CoospoDeviceType getCoospoDeviceType(String deviceName) {
 
 Color getCoospoColor(CoospoDeviceType type) {
   switch (type) {
-    case CoospoDeviceType.heartRateBand: return const Color(0xFFFF4444);
-    case CoospoDeviceType.armband: return const Color(0xFFFF8C00);
-    case CoospoDeviceType.unknown: return const Color.fromARGB(255,255,210,31);
-    default: return const Color.fromARGB(255,255,210,31);
+    case CoospoDeviceType.heartRateBand:
+      return const Color(0xFFFF4444);
+    case CoospoDeviceType.armband:
+      return const Color(0xFFFF8C00);
+    case CoospoDeviceType.unknown:
+      return const Color.fromARGB(255, 255, 210, 31);
+    default:
+      return const Color.fromARGB(255, 255, 210, 31);
   }
 }
 
@@ -45,16 +48,15 @@ class DeviceDetailScreen extends StatefulWidget {
 
 class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     with SingleTickerProviderStateMixin {
-  
   // BLE State
   bool isConnected = false;
   bool isStreaming = false;
   int currentHeartRate = 0;
   int signalStrength = -50;
-  
+
   // UI State
   bool isMapExpanded = false;
-  
+
   // Activity Tracking
   bool isActivityRunning = false;
   int? currentActivityId;
@@ -62,11 +64,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   double totalDistance = 0.0;
   int waypointCount = 0;
   DateTime? activityStartTime;
-  
+
+  // Local tracking storage
+  final List<int> heartRateHistory = [];
+  int maxHeartRate = 0;
+  int minHeartRate = 999;
+  final List<Map<String, dynamic>> activityWaypoints = [];
+
   // Streams for activity screen
-  final StreamController<int> _heartRateStreamController = StreamController<int>.broadcast();
-  final StreamController<LatLng> _positionStreamController = StreamController<LatLng>.broadcast();
-  
+  final StreamController<int> _heartRateController = StreamController<int>.broadcast();
+  final StreamController<LatLng> _positionController = StreamController<LatLng>.broadcast();
+
   // Subscriptions & Controllers
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
   StreamSubscription<List<int>>? _characteristicSubscription;
@@ -75,13 +83,13 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   late AnimationController _heartbeatController;
   late CoospoDeviceType deviceType;
   late Color deviceColor;
-  
+
   // GPS
   AppleMapController? mapController;
   LatLng? currentPosition;
   LatLng? lastWaypointPosition;
   StreamSubscription<Position>? positionStream;
-  
+
   final String serverUrl = 'https://heart-rate-monitor-hu47.onrender.com';
 
   @override
@@ -96,35 +104,36 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     _listenToDeviceState();
     _startTracking();
   }
-  
+
   @override
   void dispose() {
-    _heartRateStreamController.close();
-    _positionStreamController.close();
+    _heartRateController.close();
+    _positionController.close();
     _rssiTimer?.cancel();
     _heartbeatController.dispose();
     _stopBleReading();
     _stopStreaming();
-    
-    // Se c'è un'attività in corso, fermala senza calorie
+
     if (currentActivityId != null) {
       _stopActivity(currentActivityId!, 0.0);
     }
-    
+
     _deviceStateSubscription?.cancel();
     positionStream?.cancel();
     waypointTimer?.cancel();
     super.dispose();
   }
+
   // ========== GPS TRACKING ==========
-  
+
   void _startTracking() async {
     print("🌍 Inizio tracking GPS...");
     if (mounted) setState(() => currentPosition = const LatLng(45.4642, 9.19));
-    
+
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled().timeout(
-        const Duration(seconds: 2), onTimeout: () => false,
+        const Duration(seconds: 2),
+        onTimeout: () => false,
       );
       if (!serviceEnabled) return;
 
@@ -137,9 +146,9 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       }
 
       Position pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best
+        desiredAccuracy: LocationAccuracy.best,
       ).timeout(const Duration(seconds: 5));
-      
+
       if (mounted) {
         setState(() => currentPosition = LatLng(pos.latitude, pos.longitude));
         if (mapController != null) {
@@ -158,15 +167,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.bestForNavigation,
           distanceFilter: 0,
-          timeLimit: Duration(milliseconds: 500),
-        )).listen((Position p) {
+        ),
+      ).listen((Position p) {
         if (mounted) {
           final pos = LatLng(p.latitude, p.longitude);
           setState(() => currentPosition = pos);
-          _positionStreamController.add(pos);
+          _positionController.add(pos);
         }
       });
-      
     } catch (e) {
       print("❌ Errore GPS: $e");
     }
@@ -175,12 +183,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   Future<void> _refreshGPS() async {
     try {
       Position pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.best
+        desiredAccuracy: LocationAccuracy.best,
       ).timeout(const Duration(seconds: 5));
-      
+
       final newPosition = LatLng(pos.latitude, pos.longitude);
       if (mounted) setState(() => currentPosition = newPosition);
-      
+
       if (mapController != null) {
         mapController!.animateCamera(
           CameraUpdate.newCameraPosition(
@@ -195,187 +203,177 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   }
 
   // ========== ACTIVITY TRACKING ==========
+
+Future<void> _startActivity() async {
+  await _showCountdown();
   
-  Future<void> _startActivity() async {
-    print("🚀 _startActivity() chiamato");
-    
-    if (!isConnected) {
-      print("❌ Dispositivo non connesso");
-      _showMessage('Connetti prima il dispositivo BLE');
-      return;
-    }
-    
-    print("✅ Dispositivo connesso, mostro countdown...");
-    await _showCountdown();
-    print("✅ Countdown completato");
-    
-    try {
-      print("📡 Invio richiesta al server: $serverUrl/api/activity/start");
-      
-      final response = await http.post(
-        Uri.parse('$serverUrl/api/activity/start'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({'device_id': widget.device.platformName}),
-      ).timeout(const Duration(seconds: 10));
-      
-      print("📥 Risposta server: ${response.statusCode}");
-      print("📥 Body: ${response.body}");
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        currentActivityId = data['activity_id'];
-        
-        print("✅ Activity ID: $currentActivityId");
-        
-        setState(() {
-          isActivityRunning = true;
-          activityStartTime = DateTime.now();
-          totalDistance = 0.0;
-          waypointCount = 0;
-          lastWaypointPosition = currentPosition;
-        });
-        
-        print("✅ State aggiornato: isActivityRunning = $isActivityRunning");
-        
-        // Timer waypoints
-        waypointTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (isActivityRunning && currentPosition != null) {
-            _sendWaypoint();
-          }
-        });
-        
-        print("🗺️ Navigating to ActivityScreen...");
-        
-        // NAVIGAZIONE
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ActivityScreen(
-              activityId: currentActivityId!,
-              onStopActivity: _stopActivity,
-              heartRateStream: _heartRateStreamController.stream,
-              positionStream: _positionStreamController.stream,
-            ),
-          ),
-        );
-        
-        print("✅ Ritorno da ActivityScreen");
-        
-      } else {
-        print("❌ Errore server: ${response.statusCode}");
-        _showMessage('Errore server: ${response.statusCode}');
-      }
-    } catch (e, stackTrace) {
-      print("❌ ERRORE CRITICO start activity: $e");
-      print("Stack trace: $stackTrace");
-      _showMessage('Errore avvio attività: $e');
-    }
-  }
-
-
-  Future<void> _showCountdown() async {
-    return showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => _CountdownDialog(),
-    );
-  }
-
-  Future<void> _sendWaypoint() async {
-    if (currentActivityId == null || currentPosition == null) return;
-    
-    try {
-      if (lastWaypointPosition != null) {
-        final distance = Geolocator.distanceBetween(
-          lastWaypointPosition!.latitude,
-          lastWaypointPosition!.longitude,
-          currentPosition!.latitude,
-          currentPosition!.longitude,
-        );
-        setState(() {
-          totalDistance += distance / 1000;
-          waypointCount++;
-        });
-      }
-      
-      await http.post(
-        Uri.parse('$serverUrl/api/activity/waypoint'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'activity_id': currentActivityId,
-          'latitude': currentPosition!.latitude,
-          'longitude': currentPosition!.longitude,
-          'heart_rate': currentHeartRate,
-        }),
-      );
-      
-      lastWaypointPosition = currentPosition;
-      
-    } catch (e) {
-      print("❌ Errore waypoint: $e");
-    }
-  }
-
-  Future<void> _stopActivity(int activityId, double calories) async {
-    try {
-      print("🛑 Arresto attività $activityId con $calories kcal...");
-      waypointTimer?.cancel();
-      
-      final response = await http.post(
-        Uri.parse('$serverUrl/api/activity/stop'),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'activity_id': activityId,
-          'calories': calories,
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        setState(() {
-          isActivityRunning = false;
-          currentActivityId = null;
-        });
-        
-        print("✅ Attività terminata, navigando alla summary...");
-        
-        // NAVIGA ALLA SUMMARY SCREEN
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ActivitySummaryScreen(activityId: activityId),
-            ),
-          );
-        }
-      } else {
-        print("❌ Errore server: ${response.statusCode}");
-        _showMessage('Errore server: ${response.statusCode}');
-      }
-    } catch (e) {
-      print("❌ Errore stop activity: $e");
-      _showMessage('Errore: $e');
-    }
-  }
-
-
-  /*
-  Widget _buildStatRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white70)),
-          Text(value, style: const TextStyle(
-            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-        ],
+  // Crea ID PRIMA di tutto
+  final activityId = DateTime.now().millisecondsSinceEpoch;
+  
+  print("🏁 Inizio attività con ID: $activityId");
+  
+  setState(() {
+    currentActivityId = activityId;
+    isActivityRunning = true;
+    activityStartTime = DateTime.now();
+    totalDistance = 0.0;
+    waypointCount = 0;
+    heartRateHistory.clear();
+    activityWaypoints.clear();
+    maxHeartRate = 0;
+    minHeartRate = 999;
+  });
+  
+  // ⭐ SALVA SUBITO IN LOCALE
+  await LocalDatabase.saveActivity({
+    'id': activityId,
+    'device_id': widget.device.remoteId.toString(),
+    'start_time': DateTime.now().toIso8601String(),
+    'status': 'running',
+    'distance': 0.0,
+    'duration': 0,
+    'calories': 0.0,
+  });
+  
+  print("💾 Attività $activityId creata in locale");
+  
+  // Avvia timer waypoints
+  _startWaypointTimer();
+  
+  // Naviga a ActivityScreen
+  if (mounted) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ActivityScreen(
+          activityId: activityId,
+          onStopActivity: _stopActivity,
+          heartRateStream: _heartRateController.stream,
+          positionStream: _positionController.stream,
+        ),
       ),
     );
   }
-  */
+}
+
+// ⭐ METODO COUNTDOWN
+Future<void> _showCountdown() async {
+  return showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => const _CountdownDialog(),
+  );
+}
+
+  void _startWaypointTimer() {
+    waypointTimer?.cancel();
+    waypointTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      _sendWaypoint();
+    });
+  }
+
+  Future<void> _sendWaypoint() async {
+  if (currentActivityId == null || currentPosition == null) {
+    print("⚠️ Waypoint saltato: activityId=$currentActivityId, position=$currentPosition");
+    return;
+  }
+
+  print("📍 Salvando waypoint ${activityWaypoints.length + 1}...");
+
+  // Calcola distanza
+  if (lastWaypointPosition != null) {
+    final distance = Geolocator.distanceBetween(
+      lastWaypointPosition!.latitude,
+      lastWaypointPosition!.longitude,
+      currentPosition!.latitude,
+      currentPosition!.longitude,
+    );
+    
+    setState(() {
+      totalDistance += distance;
+      waypointCount++;
+
+      if (currentHeartRate > 0) {
+        heartRateHistory.add(currentHeartRate);
+        if (currentHeartRate > maxHeartRate) maxHeartRate = currentHeartRate;
+        if (currentHeartRate < minHeartRate) minHeartRate = currentHeartRate;
+      }
+    });
+    
+    print("📏 Distanza totale: ${totalDistance / 1000} km");
+  }
+
+  // Aggiungi waypoint
+  activityWaypoints.add({
+    'latitude': currentPosition!.latitude,
+    'longitude': currentPosition!.longitude,
+    'heart_rate': currentHeartRate,
+    'timestamp': DateTime.now().toIso8601String(),
+  });
+
+  // ⭐ SALVA WAYPOINTS IN LOCALE
+  await LocalDatabase.saveWaypoints(currentActivityId!, activityWaypoints);
+  print("💾 Waypoint ${activityWaypoints.length} salvato");
+
+  lastWaypointPosition = currentPosition;
+}
+
+
+
+
+Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
+  waypointTimer?.cancel();
+  
+  // Calcola durata in secondi
+  final duration = activityStartTime != null 
+      ? DateTime.now().difference(activityStartTime!).inSeconds 
+      : 0;
+  
+  print("🛑 Stop attività $activityId");
+  print("⏱️ Durata: $duration secondi");
+  print("📏 Distanza: ${totalDistance / 1000} km");
+  print("📍 Waypoints: ${activityWaypoints.length}");
+  print("🔥 Calorie: $calories");
+  
+  // ⭐ AGGIORNA ATTIVITÀ CON DATI FINALI
+  await LocalDatabase.saveActivity({
+    'id': activityId,
+    'device_id': widget.device.remoteId.toString(),
+    'start_time': activityStartTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
+    'end_time': DateTime.now().toIso8601String(),
+    'status': 'completed', // ⭐ IMPORTANTE: completed
+    'distance': totalDistance,
+    'duration': duration,
+    'calories': calories,
+  });
+  
+  // ⭐ SALVA WAYPOINTS FINALI
+  if (activityWaypoints.isNotEmpty) {
+    await LocalDatabase.saveWaypoints(activityId, activityWaypoints);
+  }
+  
+  print("💾 Attività salvata completamente in locale");
+  
+  setState(() {
+    isActivityRunning = false;
+    currentActivityId = null;
+  });
+  
+  // ⭐ NAVIGA ALLA SUMMARY
+  if (mounted) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ActivitySummaryScreen(activityId: activityId),
+      ),
+    );
+  }
+}
+
+
 
   // ========== BLE CONNECTION & STREAMING ==========
-  
+
   void _triggerHeartbeat() {
     _heartbeatController.forward().then((_) => _heartbeatController.reverse());
   }
@@ -421,17 +419,16 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     if (signalStrength > -75) return Icons.signal_cellular_alt_2_bar;
     return Icons.signal_cellular_alt_1_bar;
   }
-  
+
   Future<void> _connectToDevice() async {
     try {
       await widget.device.connect();
       setState(() => isConnected = true);
-      
-      // SALVA DEVICE ID IN SHARED PREFERENCES
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_device_id', widget.device.platformName);
       print("✅ Device ID salvato: ${widget.device.platformName}");
-      
+
       await _startBleReading();
     } catch (e) {
       setState(() => isConnected = false);
@@ -440,18 +437,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
 
   Future<void> _disconnect() async {
     print('🔴 DISCONNESSIONE');
-    
+
     if (isActivityRunning && currentActivityId != null) {
-      // Disconnessione mentre attività in corso - ferma con calorie 0
       await _stopActivity(currentActivityId!, 0.0);
     }
-    
+
     if (isStreaming) await _stopStreaming();
-    
+
     await _characteristicSubscription?.cancel();
     _characteristicSubscription = null;
     _rssiTimer?.cancel();
-    
+
     setState(() {
       isConnected = false;
       isStreaming = false;
@@ -459,7 +455,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       isActivityRunning = false;
       currentActivityId = null;
     });
-    
+
     try {
       await widget.device.disconnect();
     } catch (e) {
@@ -467,12 +463,11 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     }
   }
 
-
   Future<void> _startBleReading() async {
     try {
       List<BluetoothService> services = await widget.device.discoverServices();
       final Guid characteristicUuid = Guid("00002a37-0000-1000-8000-00805f9b34fb");
-      
+
       BluetoothCharacteristic? characteristic;
       for (var service in services) {
         try {
@@ -484,15 +479,15 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       if (characteristic == null) return;
       await characteristic.setNotifyValue(true);
 
-      _characteristicSubscription = characteristic.value.listen((data) {
+      _characteristicSubscription = characteristic.lastValueStream.listen((data) {
         if (data.isEmpty) return;
         int hr = _decodeData(data);
-        
+
         if (hr > 0) {
           setState(() => currentHeartRate = hr);
           _triggerHeartbeat();
-          _heartRateStreamController.add(hr);
-          
+          _heartRateController.add(hr);
+
           if (isStreaming && _socket != null && _socket!.connected) {
             _sendToServer(data);
           }
@@ -529,10 +524,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
 
   void _sendToServer(List<int> data) {
     if (_socket == null || !_socket!.connected) return;
-    
+
     final encoded = base64.encode(data);
     final deviceTypeStr = deviceType.toString().split('.').last;
-    
+
     final message = {
       'device_type': deviceTypeStr,
       'device_id': widget.device.platformName,
@@ -540,16 +535,20 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       'latitude': currentPosition?.latitude,
       'longitude': currentPosition?.longitude,
     };
-    
+
     _socket?.emit('heart_rate_data', message);
   }
 
   Future<void> _stopStreaming() async {
-    setState(() => isStreaming = false);
+    // ⭐ NON chiamare setState se il widget è morto
+    if (mounted) {
+      setState(() => isStreaming = false);
+    }
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
   }
+
 
   int _decodeData(List<int> data) {
     if (data.isEmpty) return 0;
@@ -581,7 +580,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   Widget build(BuildContext context) {
     final signalColor = _getSignalColor();
     final signalIcon = _getSignalIcon();
-    
+
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 0, 0, 0),
       appBar: AppBar(
@@ -607,7 +606,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                   Icon(signalIcon, color: signalColor, size: 18),
                   const SizedBox(width: 6),
                   Text('${signalStrength} dBm',
-                    style: TextStyle(color: signalColor, fontSize: 11, fontWeight: FontWeight.bold)),
+                      style: TextStyle(color: signalColor, fontSize: 11, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
@@ -635,8 +634,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       child: AppleMap(
                         onMapCreated: (controller) {
                           mapController = controller;
-                          
-                          // AUTO-CENTER sulla posizione attuale
+
                           if (currentPosition != null) {
                             controller.animateCamera(
                               CameraUpdate.newCameraPosition(
@@ -656,7 +654,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                         myLocationButtonEnabled: false,
                         compassEnabled: true,
                       ),
-
                     ),
                   ),
                   Positioned(
@@ -677,7 +674,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                   ),
                 ],
               ),
-              
+
               // Espandi/Comprimi
               InkWell(
                 onTap: () => setState(() => isMapExpanded = !isMapExpanded),
@@ -687,15 +684,15 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(isMapExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                        color: const Color.fromARGB(206, 255, 255, 255), size: 28),
+                          color: const Color.fromARGB(206, 255, 255, 255), size: 28),
                       const SizedBox(width: 8),
                       Text(isMapExpanded ? 'Comprimi' : 'Espandi',
-                        style: const TextStyle(color: Color.fromARGB(206, 255, 255, 255), fontSize: 14)),
+                          style: const TextStyle(color: Color.fromARGB(206, 255, 255, 255), fontSize: 14)),
                     ],
                   ),
                 ),
               ),
-              
+
               // BATTITO + BOTTONI
               if (!isMapExpanded)
                 Expanded(
@@ -707,7 +704,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                         children: [
                           ScaleTransition(
                             scale: Tween<double>(begin: 1.0, end: 1.2).animate(
-                              CurvedAnimation(parent: _heartbeatController, curve: Curves.easeOut)),
+                                CurvedAnimation(parent: _heartbeatController, curve: Curves.easeOut)),
                             child: Container(
                               width: 120,
                               height: 120,
@@ -720,22 +717,23 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                           ),
                           const SizedBox(height: 20),
                           Text(currentHeartRate > 0 ? '$currentHeartRate' : '--',
-                            style: TextStyle(fontSize: 70, fontWeight: FontWeight.w900, color: deviceColor)),
-                          Text('BPM', style: TextStyle(fontSize: 20, color: deviceColor.withOpacity(0.7), letterSpacing: 6)),
+                              style: TextStyle(fontSize: 70, fontWeight: FontWeight.w900, color: deviceColor)),
+                          Text('BPM',
+                              style: TextStyle(fontSize: 20, color: deviceColor.withOpacity(0.7), letterSpacing: 6)),
                           const SizedBox(height: 30),
-                          
+
                           if (!isConnected)
-                            _buildButton(label: 'CONNETTI', icon: Icons.bluetooth_connected, 
-                              color: const Color.fromARGB(255, 30, 30, 30), onPressed: _connectToDevice),
-                          
+                            _buildButton(
+                                label: 'CONNETTI', icon: Icons.bluetooth_connected,
+                                color: const Color.fromARGB(255, 30, 30, 30), onPressed: _connectToDevice),
+
                           if (isConnected) ...[
-                            _buildButton(label: 'AVVIA ATTIVITÀ', icon: Icons.play_arrow,
-                              color: Colors.green, onPressed: _startActivity, size: 18),
+                            _buildButton(label: 'AVVIA ATTIVITÀ', icon: Icons.play_arrow, color: Colors.green, onPressed: _startActivity, size: 18),
                             const SizedBox(height: 12),
                             _buildButton(label: isStreaming ? 'FERMA STREAM' : 'AVVIA STREAM',
-                              icon: isStreaming ? Icons.stop_circle : Icons.cloud_upload,
-                              color: isStreaming ? Colors.red : const Color.fromARGB(255, 78, 0, 109),
-                              onPressed: isStreaming ? _stopStreaming : _startStreaming),
+                                icon: isStreaming ? Icons.stop_circle : Icons.cloud_upload,
+                                color: isStreaming ? Colors.red : const Color.fromARGB(255, 78, 0, 109),
+                                onPressed: isStreaming ? _stopStreaming : _startStreaming),
                             const SizedBox(height: 12),
                             SizedBox(
                               width: double.infinity,
@@ -743,7 +741,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                                 onPressed: _disconnect,
                                 icon: const Icon(Icons.bluetooth_disabled, size: 22),
                                 label: const Text('DISCONNETTI',
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 2)),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: Colors.red,
                                   side: const BorderSide(color: Colors.red, width: 2),
@@ -760,48 +758,48 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                 ),
             ],
           ),
-          
-        if (isMapExpanded)
-          Positioned(
-            bottom: 120,
-            right: 70,
-            left: 70,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(100),
-                border: Border.all(color: deviceColor, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: deviceColor.withOpacity(0.6),
-                    blurRadius: 15,
-                    spreadRadius: 3,
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              child: Row(
-                children: [
-                  Icon(Icons.favorite, color: deviceColor, size: 30),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      currentHeartRate > 0 ? '$currentHeartRate BPM' : ' -- BPM ',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 25,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis, // evita overflow
-                      textAlign: TextAlign.center,     // centra il testo
+
+          if (isMapExpanded)
+            Positioned(
+              bottom: 120,
+              right: 70,
+              left: 70,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(100),
+                  border: Border.all(color: deviceColor, width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: deviceColor.withOpacity(0.6),
+                      blurRadius: 15,
+                      spreadRadius: 3,
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.favorite, color: deviceColor, size: 30),
-                ],
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                child: Row(
+                  children: [
+                    Icon(Icons.favorite, color: deviceColor, size: 30),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        currentHeartRate > 0 ? '$currentHeartRate BPM' : ' -- BPM ',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 25,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.favorite, color: deviceColor, size: 30),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -833,11 +831,13 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
 // ========== COUNTDOWN DIALOG ==========
 
 class _CountdownDialog extends StatefulWidget {
+  const _CountdownDialog({Key? key}) : super(key: key);
+
   @override
   __CountdownDialogState createState() => __CountdownDialogState();
 }
 
-class __CountdownDialogState extends State<_CountdownDialog> 
+class __CountdownDialogState extends State<_CountdownDialog>
     with SingleTickerProviderStateMixin {
   int countdown = 3;
   late AnimationController _controller;
@@ -851,15 +851,15 @@ class __CountdownDialogState extends State<_CountdownDialog>
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
-    
+
     _scaleAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
-    
+
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
-    
+
     _startCountdown();
   }
 
@@ -877,13 +877,12 @@ class __CountdownDialogState extends State<_CountdownDialog>
       }
       await Future.delayed(const Duration(seconds: 1));
     }
-    
-    // VIA!
+
     if (mounted) {
       setState(() => countdown = 0);
       _controller.forward(from: 0);
     }
-    
+
     await Future.delayed(const Duration(milliseconds: 700));
     if (mounted) Navigator.pop(context);
   }
@@ -908,49 +907,49 @@ class __CountdownDialogState extends State<_CountdownDialog>
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: countdown > 0 
-                      ? const Color.fromARGB(255,255,210,31).withOpacity(0.7)
-                      : const Color(0xFF00FF87).withOpacity(0.7),
+                    color: countdown > 0
+                        ? const Color.fromARGB(255, 255, 210, 31).withOpacity(0.7)
+                        : const Color(0xFF00FF87).withOpacity(0.7),
                     blurRadius: 100,
                     spreadRadius: 30,
                   ),
                 ],
               ),
               child: countdown > 0
-                ? Text(
-                    '$countdown',
-                    style: TextStyle(
-                      color: const Color.fromARGB(255,255,210,31),
-                      fontSize: 200,
-                      fontWeight: FontWeight.w900,
-                      fontFamily: 'SF Pro Display',
-                      letterSpacing: -10,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black.withOpacity(0.5),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+                  ? Text(
+                      '$countdown',
+                      style: TextStyle(
+                        color: const Color.fromARGB(255, 255, 210, 31),
+                        fontSize: 200,
+                        fontWeight: FontWeight.w900,
+                        fontFamily: 'SF Pro Display',
+                        letterSpacing: -10,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                    )
+                  : const Text(
+                      'VIA!',
+                      style: TextStyle(
+                        color: Color(0xFF00FF87),
+                        fontSize: 120,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 15,
+                        fontFamily: 'SF Pro Display',
+                        shadows: [
+                          Shadow(
+                            color: Colors.black38,
+                            blurRadius: 20,
+                            offset: Offset(0, 10),
+                          ),
+                        ],
+                      ),
                     ),
-                  )
-                : const Text(
-                    'VIA!',
-                    style: TextStyle(
-                      color: Color(0xFF00FF87),
-                      fontSize: 120,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 15,
-                      fontFamily: 'SF Pro Display',
-                      shadows: [
-                        Shadow(
-                          color: Colors.black38,
-                          blurRadius: 20,
-                          offset: Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                  ),
             ),
           ),
         ),

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:apple_maps_flutter/apple_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/user_profile.dart';
-import '../database/profile_db.dart';
+import '../database/profili_db.dart';
 
 class ActivityScreen extends StatefulWidget {
   final int activityId;
@@ -204,7 +204,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.pause_circle_outline, color: Color(0xFFFF1744), size: 60),
+              const Icon(Icons.pause_circle_outline, color: Color.fromARGB(255, 255, 255, 255), size: 60),
               const SizedBox(height: 20),
               const Text(
                 'VUOI FERMARE\nL\'ATTIVITÀ?',
@@ -328,10 +328,10 @@ class _ActivityScreenState extends State<ActivityScreen> {
               decoration: BoxDecoration(
                 color: Colors.black87,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFFC5200), width: 2),
+                border: Border.all(color: const Color.fromARGB(255, 255, 210, 31), width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFFFC5200).withOpacity(0.3),
+                    color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.3),
                     blurRadius: 15,
                     spreadRadius: 2,
                   )

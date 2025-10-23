@@ -277,12 +277,16 @@ class _DeviceListScreenState extends State<DeviceListScreen>
             offset: const Offset(0, 50),
             onSelected: (value) {
               if (value == 'archive') {
+
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const ActivitiesArchiveScreen(),
+                    builder: (context) => ActivitiesArchiveScreen(
+                      deviceId: 'all',
+                    ),
                   ),
                 );
+
               } else if (value == 'profiles') {
                 Navigator.push(
                   context,
@@ -414,14 +418,14 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                         Icon(
                           Icons.bluetooth_searching,
                           size: 100,
-                          color: Colors.white30,
+                          color: Colors.white54,
                         ),
                         const SizedBox(height: 20),
                         Text(
                           'Nessun dispositivo trovato',
                           style: TextStyle(
                             fontSize: 20,
-                            color: Colors.white30,
+                            color: Colors.white54,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -430,7 +434,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                           'Premi il pulsante per iniziare',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white30,
+                            color: Colors.white54,
                           ),
                         ),
                       ],
