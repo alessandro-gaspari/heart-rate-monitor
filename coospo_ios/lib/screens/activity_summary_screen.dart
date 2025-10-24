@@ -225,80 +225,132 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
         ),
       ),
       body: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(), // ⭐ Cambia physics
         child: Column(
           children: [
-            // MAPPA
-            if (waypoints.length >= 2) // ⭐ Serve almeno 2 waypoints per fare segmenti
-              Container(
-                height: 300,
-                margin: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.3),
-                      blurRadius: 10,
-                      spreadRadius: 2,
-                    ),
-                  ],
+// MAPPA
+if (waypoints.length >= 2)
+  Stack(
+    children: [
+      Container(
+        height: 300,
+        margin: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.3),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: AbsorbPointer( // ⭐ Disabilita interazioni sulla preview
+            child: AppleMap(
+              onMapCreated: (controller) {
+                mapController = controller;
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  _fitMapToBounds();
+                });
+              },
+              initialCameraPosition: CameraPosition(
+                target: LatLng(
+                  waypoints.first['latitude'] as double,
+                  waypoints.first['longitude'] as double,
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: AppleMap(
-                    onMapCreated: (controller) {
-                      print("🗺️ Mappa creata!");
-                      mapController = controller;
-                      Future.delayed(const Duration(milliseconds: 500), () {
-                        _fitMapToBounds();
-                      });
-                    },
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(
-                        waypoints.first['latitude'] as double,
-                        waypoints.first['longitude'] as double,
-                      ),
-                      zoom: 15.0,
-                    ),
+                zoom: 15.0,
+              ),
+              polylines: polylines,
+              myLocationEnabled: false,
+              compassEnabled: false,
+            ),
+          ),
+        ),
+      ),
+      // ⭐ BOTTONE FULLSCREEN in alto a destra
+      Positioned(
+        top: 30,
+        right: 30,
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(255, 255, 210, 31),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.6),
+                blurRadius: 12,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.fullscreen, color: Colors.black),
+            iconSize: 24,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => _FullScreenMap(
+                    waypoints: waypoints,
                     polylines: polylines,
-                    myLocationEnabled: false,
-                    compassEnabled: true,
                   ),
                 ),
-              )
-            else
-              Container(
-                height: 200,
-                margin: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 30, 30, 30),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.map_outlined, size: 60, color: Colors.white30),
-                      const SizedBox(height: 10),
-                      Text(
-                        waypoints.length == 1 
-                            ? 'Attività troppo breve\nMuoviti per registrare il percorso'
-                            : 'Nessun percorso registrato',
-                        style: const TextStyle(color: Colors.white54, fontSize: 14),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
+              );
+            },
+          ),
+        ),
+      ),
+    ],
+  )
+else
+  Container(
+    height: 200,
+    margin: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: const Color.fromARGB(255, 30, 30, 30),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.map_outlined, size: 60, color: Colors.white30),
+          const SizedBox(height: 10),
+          Text(
+            waypoints.length == 1 
+                ? 'Attività troppo breve\nMuoviti per registrare il percorso'
+                : 'Nessun percorso registrato',
+            style: const TextStyle(color: Colors.white54, fontSize: 14),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    ),
+  ),
+
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+              child: Text(
+                'B P M',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                  fontStyle: FontStyle.normal,
                 ),
               ),
+            ),
 
-            // LEGENDA
+                        // LEGENDA
             if (waypoints.isNotEmpty && heartRates.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildLegendItem('< 100 BPM', Colors.green),
+                    _buildLegendItem('< 100', Colors.green),
                     const SizedBox(width: 16),
                     _buildLegendItem('100-140', Colors.orange),
                     const SizedBox(width: 16),
@@ -447,6 +499,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
       ),  
 
     );
+    
   }
 
   Widget _buildStatCard({
@@ -584,6 +637,115 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
     mapController!.animateCamera(
       CameraUpdate.newCameraPosition(
         CameraPosition(target: center, zoom: 14.0),
+      ),
+    );
+  }
+  
+}
+
+
+// ========== MAPPA A SCHERMO INTERO ==========
+class _FullScreenMap extends StatefulWidget {
+  final List<Map<String, dynamic>> waypoints;
+  final Set<Polyline> polylines;
+
+  const _FullScreenMap({
+    Key? key,
+    required this.waypoints,
+    required this.polylines,
+  }) : super(key: key);
+
+  @override
+  _FullScreenMapState createState() => _FullScreenMapState();
+}
+
+class _FullScreenMapState extends State<_FullScreenMap> {
+  AppleMapController? mapController;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          AppleMap(
+            onMapCreated: (controller) {
+              mapController = controller;
+              Future.delayed(const Duration(milliseconds: 500), () {
+                _fitMapToBounds();
+              });
+            },
+            initialCameraPosition: CameraPosition(
+              target: LatLng(
+                widget.waypoints.first['latitude'] as double,
+                widget.waypoints.first['longitude'] as double,
+              ),
+              zoom: 15.0,
+            ),
+            polylines: widget.polylines,
+            myLocationEnabled: false,
+            compassEnabled: true,
+            minMaxZoomPreference: const MinMaxZoomPreference(10, 20),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.black87,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      iconSize: 28,
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color.fromARGB(255, 255, 210, 31),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.my_location, color: Colors.black),
+                      iconSize: 24,
+                      onPressed: () => _fitMapToBounds(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _fitMapToBounds() {
+    if (widget.waypoints.isEmpty || mapController == null) return;
+    double minLat = widget.waypoints.first['latitude'] as double;
+    double maxLat = minLat;
+    double minLng = widget.waypoints.first['longitude'] as double;
+    double maxLng = minLng;
+
+    for (var w in widget.waypoints) {
+      final lat = w['latitude'] as double;
+      final lng = w['longitude'] as double;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lng < minLng) minLng = lng;
+      if (lng > maxLng) maxLng = lng;
+    }
+
+    mapController!.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2),
+          zoom: 14.0,
+        ),
       ),
     );
   }
