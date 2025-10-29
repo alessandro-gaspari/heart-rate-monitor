@@ -1,5 +1,5 @@
 name: coospo_ios
-description: A Bluetooth and GPS scanner app
+description: App per la connessione e streaming di device COOSPO
 publish_to: 'none'
 
 version: 1.0.0+1

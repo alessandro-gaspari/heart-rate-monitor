@@ -225,9 +225,10 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        physics: const ClampingScrollPhysics(), // ⭐ Cambia physics
+        physics: const ClampingScrollPhysics(),
         child: Column(
           children: [
+
 // MAPPA
 if (waypoints.length >= 2)
   Stack(
@@ -247,7 +248,7 @@ if (waypoints.length >= 2)
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: AbsorbPointer( // ⭐ Disabilita interazioni sulla preview
+          child: AbsorbPointer( // Disabilita interazioni mappa sulla preview
             child: AppleMap(
               onMapCreated: (controller) {
                 mapController = controller;
@@ -269,7 +270,7 @@ if (waypoints.length >= 2)
           ),
         ),
       ),
-      // ⭐ BOTTONE FULLSCREEN in alto a destra
+      // bottone per il fullscreen in alto a destra
       Positioned(
         top: 30,
         right: 30,
@@ -342,7 +343,7 @@ else
               ),
             ),
 
-                        // LEGENDA
+            // LEGENDA
             if (waypoints.isNotEmpty && heartRates.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -463,7 +464,6 @@ else
         ),
       ),
 
-      // ⭐ AGGIUNGI IL BOTTONE ROSSO QUI
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
         decoration: const BoxDecoration(
@@ -474,7 +474,7 @@ else
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                // Torna alla DeviceListScreen (rimuove tutte le schermate precedenti)
+                // Torna alla DeviceListScreen
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
               style: ElevatedButton.styleFrom(
@@ -643,8 +643,8 @@ else
   
 }
 
+// MAPPA A SCHERMO INTERO
 
-// ========== MAPPA A SCHERMO INTERO ==========
 class _FullScreenMap extends StatefulWidget {
   final List<Map<String, dynamic>> waypoints;
   final Set<Polyline> polylines;

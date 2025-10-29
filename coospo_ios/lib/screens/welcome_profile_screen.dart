@@ -26,7 +26,7 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
             children: [
               const SizedBox(height: 40),
               
-              // Emoji benvenuto
+              // Emoji per il benvenuto
               const Text(
                 '👋',
                 style: TextStyle(fontSize: 80),

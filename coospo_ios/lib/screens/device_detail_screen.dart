@@ -48,16 +48,16 @@ class DeviceDetailScreen extends StatefulWidget {
 
 class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     with SingleTickerProviderStateMixin {
-  // BLE State
+  // Stato BLE
   bool isConnected = false;
   bool isStreaming = false;
   int currentHeartRate = 0;
   int signalStrength = -50;
 
-  // UI State
+  // Stato UI
   bool isMapExpanded = false;
 
-  // Activity Tracking
+  // Tracking attività
   bool isActivityRunning = false;
   int? currentActivityId;
   Timer? waypointTimer;
@@ -65,17 +65,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   int waypointCount = 0;
   DateTime? activityStartTime;
 
-  // Local tracking storage
+  // Tracking locale
   final List<int> heartRateHistory = [];
   int maxHeartRate = 0;
   int minHeartRate = 999;
   final List<Map<String, dynamic>> activityWaypoints = [];
 
-  // Streams for activity screen
+  // Streaming per la schermata attività
   final StreamController<int> _heartRateController = StreamController<int>.broadcast();
   final StreamController<LatLng> _positionController = StreamController<LatLng>.broadcast();
 
-  // Subscriptions & Controllers
+  // Subscription e controller
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
   StreamSubscription<List<int>>? _characteristicSubscription;
   Timer? _rssiTimer;
@@ -124,7 +124,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     super.dispose();
   }
 
-  // ========== GPS TRACKING ==========
+  // TRACKING GPS
 
   void _startTracking() async {
     print("🌍 Inizio tracking GPS...");
@@ -202,12 +202,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     }
   }
 
-  // ========== ACTIVITY TRACKING ==========
+  // TRACKING ATTIVITÀ
 
 Future<void> _startActivity() async {
   await _showCountdown();
   
-  // Crea ID PRIMA di tutto
+  // Crea ID prima di tutto
   final activityId = DateTime.now().millisecondsSinceEpoch;
   
   print("🏁 Inizio attività con ID: $activityId");
@@ -224,7 +224,7 @@ Future<void> _startActivity() async {
     minHeartRate = 999;
   });
   
-  // ⭐ SALVA SUBITO IN LOCALE
+  // salva subito in locale (per evitare errori di sincronizzazione)
   await LocalDatabase.saveActivity({
     'id': activityId,
     'device_id': widget.device.remoteId.toString(),
@@ -256,7 +256,7 @@ Future<void> _startActivity() async {
   }
 }
 
-// ⭐ METODO COUNTDOWN
+// countdown
 Future<void> _showCountdown() async {
   return showDialog(
     context: context,
@@ -311,7 +311,7 @@ Future<void> _showCountdown() async {
     'timestamp': DateTime.now().toIso8601String(),
   });
 
-  // ⭐ SALVA WAYPOINTS IN LOCALE
+  // Salva i waypoints in locale
   await LocalDatabase.saveWaypoints(currentActivityId!, activityWaypoints);
   print("💾 Waypoint ${activityWaypoints.length} salvato");
 
@@ -335,7 +335,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
   print("📍 Waypoints: ${activityWaypoints.length}");
   print("🔥 Calorie: $calories");
   
-  // ⭐ AGGIORNA ATTIVITÀ CON DATI FINALI
+  // Aggiorna attività con i dati finali
   await LocalDatabase.saveActivity({
     'id': activityId,
     'device_id': widget.device.remoteId.toString(),
@@ -347,7 +347,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     'calories': calories,
   });
   
-  // ⭐ SALVA WAYPOINTS FINALI
+  // Salvo i waypoints in locale
   if (activityWaypoints.isNotEmpty) {
     await LocalDatabase.saveWaypoints(activityId, activityWaypoints);
   }
@@ -359,7 +359,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     currentActivityId = null;
   });
   
-  // ⭐ NAVIGA ALLA SUMMARY
+  // Navigo fino al registro attività
   if (mounted) {
     Navigator.pushReplacement(
       context,
@@ -372,7 +372,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
 
 
 
-  // ========== BLE CONNECTION & STREAMING ==========
+  // CONNESSIONE BLE E STREAMING
 
   void _triggerHeartbeat() {
     _heartbeatController.forward().then((_) => _heartbeatController.reverse());
@@ -540,7 +540,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
   }
 
   Future<void> _stopStreaming() async {
-    // ⭐ NON chiamare setState se il widget è morto
+    // Se il widget è morto non chiamo setState
     if (mounted) {
       setState(() => isStreaming = false);
     }
@@ -574,7 +574,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     );
   }
 
-  // ========== UI BUILD ==========
+  // UI
 
   @override
   Widget build(BuildContext context) {
@@ -828,7 +828,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
   }
 }
 
-// ========== COUNTDOWN DIALOG ==========
+// DIALOG DEL COUNTDOWN 
 
 class _CountdownDialog extends StatefulWidget {
   const _CountdownDialog({Key? key}) : super(key: key);

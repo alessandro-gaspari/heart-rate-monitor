@@ -18,7 +18,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}">
 </head>
 <body>
-    <!-- Background Gradient -->
+    <!-- Sfondo sfumato -->
     <div class="gradient-bg"></div>
 
     <!-- Header -->
@@ -37,7 +37,7 @@
     <!-- Main Container -->
     <div class="container">
         
-        <!-- BPM Card -->
+        <!-- Card per i BPM -->
         <div class="bpm-card glass">
             <div class="bpm-header">
                 <i data-lucide="activity" class="bpm-icon"></i>
@@ -54,7 +54,7 @@
             </div>
         </div>
 
-        <!-- Stats Grid -->
+        <!-- Griglia per le statistiche -->
         <div class="stats-grid">
             <div class="stat-card glass">
                 <div class="stat-icon yellow">
@@ -108,7 +108,7 @@
             </div>
         </div>
 
-        <!-- Map Card -->
+        <!-- Card per la mappa -->
         <div class="map-card glass">
             <div class="chart-header">
                 <div class="chart-title">
@@ -123,7 +123,7 @@
             <div id="map" class="map-container"></div>
         </div>
 
-        <!-- Chart Card -->
+        <!-- Card per il grafico -->
         <div class="chart-card glass">
             <div class="chart-header">
                 <div class="chart-title">
@@ -145,7 +145,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
     
-    <!-- Initialize Icons -->
+    <!-- Icone -->
     <script>
         lucide.createIcons();
     </script>

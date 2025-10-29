@@ -60,7 +60,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       });
     }
     if (profile == null) {
-      print('⚠️ Nessun profilo attivo - calorie non verranno calcolate');
+      print('⚠️ Nessun profilo attivo - le calorie non verranno calcolate');
     } else {
       print('✅ Profilo attivo caricato: ${profile.name}');
     }
@@ -85,7 +85,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
       }
       setState(() {});
     } catch (e) {
-      print('❌ Errore nel prendere posizione iniziale: $e');
+      print('❌ Errore nel prendere la posizione iniziale: $e');
     }
   }
 
@@ -318,7 +318,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
             },
           ),
           
-          // Header con stats
+          // Header con statistiche
           Positioned(
             top: 60,
             left: 16,

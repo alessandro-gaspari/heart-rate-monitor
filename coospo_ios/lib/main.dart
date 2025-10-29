@@ -78,7 +78,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
         ),
       ),
-      home: const SplashScreen(), // ⭐ Cambiato da DeviceListScreen
+      home: const SplashScreen(),
       routes: {
         '/home': (context) => const DeviceListScreen(),
         '/welcome': (context) => WelcomeProfileScreen(),
@@ -137,15 +137,15 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
             const SizedBox(height: 50),
-            // Linear Progress Bar centrata, spessa e piccola
+            // Linear Progress Bar iniziale
             SizedBox(
-              width: 150, // Larghezza ridotta
+              width: 150, 
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(10), // Bordi arrotondati
+                borderRadius: BorderRadius.circular(10),
                 child: LinearProgressIndicator(
                   minHeight: 8, // Più spessa
-                  color: const Color.fromARGB(255, 255, 210, 31), // Giallo
-                  backgroundColor: Colors.white.withOpacity(0.2), // Sfondo trasparente
+                  color: const Color.fromARGB(255, 255, 210, 31), 
+                  backgroundColor: Colors.white.withOpacity(0.2),
                 ),
               ),
             ),

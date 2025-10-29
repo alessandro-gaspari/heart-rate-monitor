@@ -13,7 +13,7 @@ CORS(app)
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# ========== DATABASE FUNCTIONS ==========
+# Funzioni per il DB
 
 def get_db_connection():
     conn = sqlite3.connect('heart_rate.db')
@@ -150,7 +150,8 @@ def decode_heart_rate(data):
     except Exception as e:
         print(f"❌ Errore decodifica heart rate: {e}")
         return 0
-# ========== ROUTES ==========
+
+# ROUTES
 
 @app.route('/')
 def index():
@@ -224,7 +225,7 @@ def get_recent_data():
         print(f"❌ Errore recent  {e}")
         return jsonify([])
 
-# ========== ACTIVITY ENDPOINTS ==========
+# ENDPOINTS DELLE ATTIVITÀ
 
 @app.route('/api/activity/start', methods=['POST'])
 def start_activity():
@@ -510,7 +511,7 @@ def delete_activity(activity_id):
         }), 500
 
 
-# ========== SOCKET.IO HANDLERS ==========
+# HANDLERS PER SOCKET.IO
 
 @socketio.on('heart_rate_data')
 def handle_heart_rate_data(data):
@@ -562,7 +563,7 @@ def handle_connect():
 def handle_disconnect():
     print('⚠️ Client web disconnesso')
 
-# ========== MAIN ==========
+# MAIN
 
 migrate_db()
 init_db()
