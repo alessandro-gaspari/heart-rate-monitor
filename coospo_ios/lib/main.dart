@@ -5,7 +5,7 @@ import 'screens/welcome_profile_screen.dart';
 import 'database/profili_db.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsFlutterBinding.ensureInitialized(); // Inizializza binding Flutter
   runApp(const MyApp());
 }
 
@@ -21,12 +21,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addObserver(this); // Osserva ciclo vita app
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    WidgetsBinding.instance.removeObserver(this); // Rimuove osservatore
     super.dispose();
   }
 
@@ -78,7 +78,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
         ),
       ),
-      home: const SplashScreen(),
+      home: const SplashScreen(), // Schermata iniziale
       routes: {
         '/home': (context) => const DeviceListScreen(),
         '/welcome': (context) => WelcomeProfileScreen(),
@@ -104,19 +104,19 @@ class _SplashScreenState extends State<SplashScreen>
     _controller = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
-    )..repeat(reverse: true);
-    _checkProfile();
+    )..repeat(reverse: true); // Animazione pulsante
+    _checkProfile(); // Controlla profili salvati
   }
 
   Future<void> _checkProfile() async {
-    await Future.delayed(const Duration(milliseconds: 800));
-    final profiles = await ProfileDatabase.getAllProfiles();
+    await Future.delayed(const Duration(milliseconds: 800)); // Pausa breve
+    final profiles = await ProfileDatabase.getAllProfiles(); // Prendi tutti i profili
     
     if (mounted) {
       if (profiles.isEmpty) {
-        Navigator.pushReplacementNamed(context, '/welcome');
+        Navigator.pushReplacementNamed(context, '/welcome'); // Vai a creazione profilo
       } else {
-        Navigator.pushReplacementNamed(context, '/home');
+        Navigator.pushReplacementNamed(context, '/home'); // Vai a lista dispositivi
       }
     }
   }
@@ -124,7 +124,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
+      backgroundColor: const Color.fromARGB(255, 0, 0, 0), // Sfondo nero
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -132,19 +132,19 @@ class _SplashScreenState extends State<SplashScreen>
               ScaleTransition(
                 scale: Tween<double>(begin: 0.95, end: 1.05).animate(_controller),
                 child: Image.asset(
-                  'assets/craiyon_105658_image.png',
+                  'assets/craiyon_105658_image.png', // Logo
                   height: 200,
                 ),
               ),
             const SizedBox(height: 50),
-            // Linear Progress Bar iniziale
+            // Barra di progresso lineare
             SizedBox(
               width: 150, 
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
                 child: LinearProgressIndicator(
-                  minHeight: 8, // Più spessa
-                  color: const Color.fromARGB(255, 255, 210, 31), 
+                  minHeight: 8, // Altezza maggiore
+                  color: const Color.fromARGB(255, 255, 210, 31), // Giallo
                   backgroundColor: Colors.white.withOpacity(0.2),
                 ),
               ),
@@ -157,8 +157,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller.dispose(); // Cancella controller animazione
     super.dispose();
   }
 }
-

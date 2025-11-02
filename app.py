@@ -13,15 +13,14 @@ CORS(app)
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# Funzioni per il DB
-
+# Connessione al database
 def get_db_connection():
     conn = sqlite3.connect('heart_rate.db')
     conn.row_factory = sqlite3.Row
     return conn
 
+# Migrazione db: aggiunge colonne GPS se mancanti
 def migrate_db():
-    """Aggiunge colonne GPS se non esistono"""
     try:
         conn = sqlite3.connect('heart_rate.db')
         cursor = conn.cursor()
@@ -42,6 +41,7 @@ def migrate_db():
     except Exception as e:
         print(f"⚠️ Errore migrazione: {e}")
 
+# Inizializza tabella heart_rate_data
 def init_db():
     conn = sqlite3.connect('heart_rate.db')
     cursor = conn.cursor()
@@ -61,8 +61,8 @@ def init_db():
     conn.close()
     print('✅ Database heart_rate_data inizializzato')
 
+# Inizializza tabelle attività e waypoints
 def init_activities_db():
-    """Crea tabelle per attività e waypoints"""
     conn = sqlite3.connect('heart_rate.db')
     cursor = conn.cursor()
     
@@ -97,8 +97,8 @@ def init_activities_db():
     conn.close()
     print('✅ Database attività inizializzato')
 
+# Calcola distanza totale in km tra waypoints (Haversine)
 def calculate_distance(waypoints):
-    """Calcola distanza totale in km tra waypoints usando formula Haversine"""
     if len(waypoints) < 2:
         return 0.0
     
@@ -121,6 +121,7 @@ def calculate_distance(waypoints):
     
     return total_distance
 
+# Decodifica dati heart rate da base64
 def decode_heart_rate(data):
     try:
         encoded_data = data.get('data', '')
@@ -151,12 +152,12 @@ def decode_heart_rate(data):
         print(f"❌ Errore decodifica heart rate: {e}")
         return 0
 
-# ROUTES
-
+# Route principale, rende dashboard
 @app.route('/')
 def index():
     return render_template('dashboard.html')
 
+# Statistiche ultimi 60 minuti
 @app.route('/api/stats')
 def get_stats():
     try:
@@ -192,6 +193,7 @@ def get_stats():
             'total_samples': 0
         })
 
+# Dati recenti (ultimi 50)
 @app.route('/api/recent')
 def get_recent_data():
     try:
@@ -225,8 +227,7 @@ def get_recent_data():
         print(f"❌ Errore recent  {e}")
         return jsonify([])
 
-# ENDPOINTS DELLE ATTIVITÀ
-
+# Inizia attività nuova
 @app.route('/api/activity/start', methods=['POST'])
 def start_activity():
     try:
@@ -256,6 +257,7 @@ def start_activity():
         print(f"❌ Errore start activity: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# Aggiunge waypoint a attività
 @app.route('/api/activity/waypoint', methods=['POST'])
 def add_waypoint():
     try:
@@ -292,6 +294,7 @@ def add_waypoint():
         print(f"❌ Errore waypoint: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# Ferma attività e calcola dati
 @app.route('/api/activity/stop', methods=['POST'])
 def stop_activity():
     try:
@@ -302,7 +305,6 @@ def stop_activity():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Calcola statistiche
         cursor.execute('''
             SELECT 
                 AVG(heart_rate) as avg_hr,
@@ -315,7 +317,6 @@ def stop_activity():
         
         stats = cursor.fetchone()
         
-        # Calcola distanza
         cursor.execute('''
             SELECT latitude, longitude 
             FROM waypoints 
@@ -330,7 +331,7 @@ def stop_activity():
             lat1, lon1 = waypoints[i-1]
             lat2, lon2 = waypoints[i]
             
-            # Formula Haversine
+            # Calcolo distanza Haversine
             from math import radians, cos, sin, asin, sqrt
             lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
             dlon = lon2 - lon1
@@ -340,7 +341,6 @@ def stop_activity():
             km = 6371 * c
             total_distance += km
         
-        # Aggiorna attività
         cursor.execute('''
             UPDATE activities 
             SET 
@@ -381,6 +381,7 @@ def stop_activity():
         print(f"❌ Errore stop activity: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# Dati attività specifica
 @app.route('/api/activity/<int:activity_id>')
 def get_activity(activity_id):
     try:
@@ -428,6 +429,7 @@ def get_activity(activity_id):
         print(f"❌ Errore get activity: {e}")
         return jsonify({'error': str(e)}), 500
 
+# Lista attività completate (opzionale filtraggio device)
 @app.route('/api/activities')
 def get_activities():
     try:
@@ -480,17 +482,14 @@ def get_activities():
         print(f"❌ Errore get activities: {e}")
         return jsonify([]), 500
     
-# API: Elimina attività
+# Elimina attività e waypoints associati
 @app.route('/api/activity/<int:activity_id>', methods=['DELETE'])
 def delete_activity(activity_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Elimina waypoints associati
         cursor.execute('DELETE FROM waypoints WHERE activity_id = ?', (activity_id,))
-        
-        # Elimina attività
         cursor.execute('DELETE FROM activities WHERE id = ?', (activity_id,))
         
         conn.commit()
@@ -510,9 +509,7 @@ def delete_activity(activity_id):
             'error': str(e)
         }), 500
 
-
-# HANDLERS PER SOCKET.IO
-
+# Gestione dati heart rate via Socket.IO
 @socketio.on('heart_rate_data')
 def handle_heart_rate_data(data):
     try:
@@ -555,16 +552,17 @@ def handle_heart_rate_data(data):
         import traceback
         traceback.print_exc()
 
+# Client connesso
 @socketio.on('connect')
 def handle_connect():
     print('✅ Client web connesso')
 
+# Client disconnesso
 @socketio.on('disconnect')
 def handle_disconnect():
     print('⚠️ Client web disconnesso')
 
-# MAIN
-
+# Avvio server e setup db
 migrate_db()
 init_db()
 init_activities_db()

@@ -106,6 +106,7 @@ function initChart() {
     console.log('✅ Grafico inizializzato');
 }
 
+// Aggiorna posizione sulla mappa
 function updateMapPosition(lat, lng) {
     if (!map || !marker) {
         console.warn('⚠️ Mappa o marker non inizializzati');
@@ -127,6 +128,7 @@ function updateMapPosition(lat, lng) {
     }
 }
 
+// Inizializza mappa Leaflet
 function initMap() {
     const mapElement = document.getElementById('map');
     if (!mapElement) {
@@ -138,7 +140,7 @@ function initMap() {
     
     L.control.zoom({ position: 'topright' }).addTo(map);
     
-    // Tema voyager dark, per mappa scura e strade chiare
+    // Tema voyager dark per mappa scura
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19
@@ -179,6 +181,7 @@ function initMap() {
     };
     centerBtn.addTo(map);
 
+    // Stili per marker GPS
     const style = document.createElement('style');
     style.textContent = `
         .gps-marker { position: relative; width: 60px; height: 60px; background: transparent !important; border: none !important; }
@@ -202,6 +205,7 @@ function initMap() {
     console.log('✅ Mappa inizializzata');
 }
 
+// Aggiunge dato al grafico
 function addDataToChart(value) {
     if (!chart) return;
     const now = new Date();
@@ -215,6 +219,7 @@ function addDataToChart(value) {
     chart.update('none');
 }
 
+// Carica statistiche da API
 function loadStats() {
     fetch('/api/stats')
         .then(res => res.json())
@@ -227,6 +232,7 @@ function loadStats() {
         .catch(err => console.error('❌ Errore stats:', err));
 }
 
+// Carica dati storici da API
 function loadHistoricalData() {
     fetch('/api/recent')
         .then(res => res.json())
@@ -243,6 +249,7 @@ function loadHistoricalData() {
         .catch(err => console.error('❌ Errore dati storici:', err));
 }
 
+// Inizializza Socket.IO
 function initSocketIO() {
     socket = io({
         transports: ['websocket'],
@@ -285,7 +292,7 @@ function initSocketIO() {
             console.warn('⚠️ GPS non presente nei dati');
         }
         
-        if (Math.random() < 0.1) loadStats();
+        if (Math.random() < 0.1) loadStats(); // Ricarica statistiche ogni 10% ricezione dati
     });
 
     socket.on('connect_error', function(error) {
@@ -297,15 +304,15 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Inizializzazione dashboard...');
     
     setTimeout(() => {
-        initChart();
-        initMap();
-        initSocketIO();
-        loadStats();
-        loadHistoricalData();
-        setInterval(loadStats, 30000);
+        initChart(); // Setup grafico
+        initMap(); // Setup mappa
+        initSocketIO(); // Setup socket
+        loadStats(); // Carica statistiche iniziali
+        loadHistoricalData(); // Carica dati storici
+        setInterval(loadStats, 30000); // Aggiorna statistiche ogni 30s
         
         if (typeof lucide !== 'undefined') {
-            lucide.createIcons();
+            lucide.createIcons(); // Inizializza icone lucide se presente
         }
         
         console.log('✅ Dashboard pronta');

@@ -1,3 +1,4 @@
+// Importazioni necessarie per BLE, socket, GPS, mappe, DB locale e UI
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -10,8 +11,10 @@ import 'activity_screen.dart';
 import 'activity_summary_screen.dart';
 import '../database/local_db.dart';
 
+// Tipi di dispositivi Coospo
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
 
+// Determina tipo dispositivo dal nome
 CoospoDeviceType getCoospoDeviceType(String deviceName) {
   deviceName = deviceName.toLowerCase();
   if (!deviceName.contains('coospo')) return CoospoDeviceType.none;
@@ -25,6 +28,7 @@ CoospoDeviceType getCoospoDeviceType(String deviceName) {
   return CoospoDeviceType.unknown;
 }
 
+// Colore associato al tipo dispositivo
 Color getCoospoColor(CoospoDeviceType type) {
   switch (type) {
     case CoospoDeviceType.heartRateBand:
@@ -48,16 +52,16 @@ class DeviceDetailScreen extends StatefulWidget {
 
 class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     with SingleTickerProviderStateMixin {
-  // Stato BLE
+  // Stato connessione BLE e streaming dati
   bool isConnected = false;
   bool isStreaming = false;
   int currentHeartRate = 0;
   int signalStrength = -50;
 
-  // Stato UI
+  // Stato UI espansione mappa
   bool isMapExpanded = false;
 
-  // Tracking attività
+  // Stato attività (tracking)
   bool isActivityRunning = false;
   int? currentActivityId;
   Timer? waypointTimer;
@@ -65,17 +69,17 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   int waypointCount = 0;
   DateTime? activityStartTime;
 
-  // Tracking locale
+  // Storico dati locali
   final List<int> heartRateHistory = [];
   int maxHeartRate = 0;
   int minHeartRate = 999;
   final List<Map<String, dynamic>> activityWaypoints = [];
 
-  // Streaming per la schermata attività
+  // Stream dati per schermata attività
   final StreamController<int> _heartRateController = StreamController<int>.broadcast();
   final StreamController<LatLng> _positionController = StreamController<LatLng>.broadcast();
 
-  // Subscription e controller
+  // Subscription e controller BLE, GPS, socket
   StreamSubscription<BluetoothConnectionState>? _deviceStateSubscription;
   StreamSubscription<List<int>>? _characteristicSubscription;
   Timer? _rssiTimer;
@@ -84,7 +88,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   late CoospoDeviceType deviceType;
   late Color deviceColor;
 
-  // GPS
+  // Controller mappa e posizione GPS
   AppleMapController? mapController;
   LatLng? currentPosition;
   LatLng? lastWaypointPosition;
@@ -95,8 +99,10 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   @override
   void initState() {
     super.initState();
+    // Determina tipo e colore dispositivo
     deviceType = getCoospoDeviceType(widget.device.platformName);
     deviceColor = getCoospoColor(deviceType);
+    // Animazione battito
     _heartbeatController = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
@@ -107,6 +113,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
 
   @override
   void dispose() {
+    // Pulisce risorse e streaming
     _heartRateController.close();
     _positionController.close();
     _rssiTimer?.cancel();
@@ -124,8 +131,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     super.dispose();
   }
 
-  // TRACKING GPS
-
+  // Avvia tracking GPS
   void _startTracking() async {
     print("🌍 Inizio tracking GPS...");
     if (mounted) setState(() => currentPosition = const LatLng(45.4642, 9.19));
@@ -163,6 +169,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
         }
       }
 
+      // Stream posizione aggiornata
       positionStream = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.bestForNavigation,
@@ -180,6 +187,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     }
   }
 
+  // Aggiorna posizione GPS manualmente
   Future<void> _refreshGPS() async {
     try {
       Position pos = await Geolocator.getCurrentPosition(
@@ -202,69 +210,66 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     }
   }
 
-  // TRACKING ATTIVITÀ
+  // Avvia attività con countdown
+  Future<void> _startActivity() async {
+    await _showCountdown();
 
-Future<void> _startActivity() async {
-  await _showCountdown();
-  
-  // Crea ID prima di tutto
-  final activityId = DateTime.now().millisecondsSinceEpoch;
-  
-  print("🏁 Inizio attività con ID: $activityId");
-  
-  setState(() {
-    currentActivityId = activityId;
-    isActivityRunning = true;
-    activityStartTime = DateTime.now();
-    totalDistance = 0.0;
-    waypointCount = 0;
-    heartRateHistory.clear();
-    activityWaypoints.clear();
-    maxHeartRate = 0;
-    minHeartRate = 999;
-  });
-  
-  // salva subito in locale (per evitare errori di sincronizzazione)
-  await LocalDatabase.saveActivity({
-    'id': activityId,
-    'device_id': widget.device.remoteId.toString(),
-    'start_time': DateTime.now().toIso8601String(),
-    'status': 'running',
-    'distance': 0.0,
-    'duration': 0,
-    'calories': 0.0,
-  });
-  
-  print("💾 Attività $activityId creata in locale");
-  
-  // Avvia timer waypoints
-  _startWaypointTimer();
-  
-  // Naviga a ActivityScreen
-  if (mounted) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ActivityScreen(
-          activityId: activityId,
-          onStopActivity: _stopActivity,
-          heartRateStream: _heartRateController.stream,
-          positionStream: _positionController.stream,
+    final activityId = DateTime.now().millisecondsSinceEpoch;
+
+    print("🏁 Inizio attività con ID: $activityId");
+
+    setState(() {
+      currentActivityId = activityId;
+      isActivityRunning = true;
+      activityStartTime = DateTime.now();
+      totalDistance = 0.0;
+      waypointCount = 0;
+      heartRateHistory.clear();
+      activityWaypoints.clear();
+      maxHeartRate = 0;
+      minHeartRate = 999;
+    });
+
+    // Salva attività in locale subito
+    await LocalDatabase.saveActivity({
+      'id': activityId,
+      'device_id': widget.device.remoteId.toString(),
+      'start_time': DateTime.now().toIso8601String(),
+      'status': 'running',
+      'distance': 0.0,
+      'duration': 0,
+      'calories': 0.0,
+    });
+
+    print("💾 Attività $activityId creata in locale");
+
+    _startWaypointTimer();
+
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ActivityScreen(
+            activityId: activityId,
+            onStopActivity: _stopActivity,
+            heartRateStream: _heartRateController.stream,
+            positionStream: _positionController.stream,
+          ),
         ),
-      ),
+      );
+    }
+  }
+
+  // Mostra dialog countdown
+  Future<void> _showCountdown() async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const _CountdownDialog(),
     );
   }
-}
 
-// countdown
-Future<void> _showCountdown() async {
-  return showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => const _CountdownDialog(),
-  );
-}
-
+  // Timer per waypoint ogni 3 secondi
   void _startWaypointTimer() {
     waypointTimer?.cancel();
     waypointTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
@@ -272,112 +277,102 @@ Future<void> _showCountdown() async {
     });
   }
 
+  // Salva waypoint e calcola distanza
   Future<void> _sendWaypoint() async {
-  if (currentActivityId == null || currentPosition == null) {
-    print("⚠️ Waypoint saltato: activityId=$currentActivityId, position=$currentPosition");
-    return;
-  }
+    if (currentActivityId == null || currentPosition == null) {
+      print("⚠️ Waypoint saltato: activityId=$currentActivityId, position=$currentPosition");
+      return;
+    }
 
-  print("📍 Salvando waypoint ${activityWaypoints.length + 1}...");
+    print("📍 Salvando waypoint ${activityWaypoints.length + 1}...");
 
-  // Calcola distanza
-  if (lastWaypointPosition != null) {
-    final distance = Geolocator.distanceBetween(
-      lastWaypointPosition!.latitude,
-      lastWaypointPosition!.longitude,
-      currentPosition!.latitude,
-      currentPosition!.longitude,
-    );
-    
-    setState(() {
-      totalDistance += distance;
-      waypointCount++;
+    if (lastWaypointPosition != null) {
+      final distance = Geolocator.distanceBetween(
+        lastWaypointPosition!.latitude,
+        lastWaypointPosition!.longitude,
+        currentPosition!.latitude,
+        currentPosition!.longitude,
+      );
 
-      if (currentHeartRate > 0) {
-        heartRateHistory.add(currentHeartRate);
-        if (currentHeartRate > maxHeartRate) maxHeartRate = currentHeartRate;
-        if (currentHeartRate < minHeartRate) minHeartRate = currentHeartRate;
-      }
+      setState(() {
+        totalDistance += distance;
+        waypointCount++;
+
+        if (currentHeartRate > 0) {
+          heartRateHistory.add(currentHeartRate);
+          if (currentHeartRate > maxHeartRate) maxHeartRate = currentHeartRate;
+          if (currentHeartRate < minHeartRate) minHeartRate = currentHeartRate;
+        }
+      });
+
+      print("📏 Distanza totale: ${totalDistance / 1000} km");
+    }
+
+    activityWaypoints.add({
+      'latitude': currentPosition!.latitude,
+      'longitude': currentPosition!.longitude,
+      'heart_rate': currentHeartRate,
+      'timestamp': DateTime.now().toIso8601String(),
     });
-    
-    print("📏 Distanza totale: ${totalDistance / 1000} km");
+
+    await LocalDatabase.saveWaypoints(currentActivityId!, activityWaypoints);
+    print("💾 Waypoint ${activityWaypoints.length} salvato");
+
+    lastWaypointPosition = currentPosition;
   }
 
-  // Aggiungi waypoint
-  activityWaypoints.add({
-    'latitude': currentPosition!.latitude,
-    'longitude': currentPosition!.longitude,
-    'heart_rate': currentHeartRate,
-    'timestamp': DateTime.now().toIso8601String(),
-  });
+  // Ferma attività e salva dati finali
+  Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
+    waypointTimer?.cancel();
 
-  // Salva i waypoints in locale
-  await LocalDatabase.saveWaypoints(currentActivityId!, activityWaypoints);
-  print("💾 Waypoint ${activityWaypoints.length} salvato");
+    final duration = activityStartTime != null
+        ? DateTime.now().difference(activityStartTime!).inSeconds
+        : 0;
 
-  lastWaypointPosition = currentPosition;
-}
+    print("🛑 Stop attività $activityId");
+    print("⏱️ Durata: $duration secondi");
+    print("📏 Distanza: ${totalDistance / 1000} km");
+    print("📍 Waypoints: ${activityWaypoints.length}");
+    print("🔥 Calorie: $calories");
 
+    await LocalDatabase.saveActivity({
+      'id': activityId,
+      'device_id': widget.device.remoteId.toString(),
+      'start_time': activityStartTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
+      'end_time': DateTime.now().toIso8601String(),
+      'status': 'completed',
+      'distance': totalDistance,
+      'duration': duration,
+      'calories': calories,
+    });
 
+    if (activityWaypoints.isNotEmpty) {
+      await LocalDatabase.saveWaypoints(activityId, activityWaypoints);
+    }
 
+    print("💾 Attività salvata completamente in locale");
 
-Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
-  waypointTimer?.cancel();
-  
-  // Calcola durata in secondi
-  final duration = activityStartTime != null 
-      ? DateTime.now().difference(activityStartTime!).inSeconds 
-      : 0;
-  
-  print("🛑 Stop attività $activityId");
-  print("⏱️ Durata: $duration secondi");
-  print("📏 Distanza: ${totalDistance / 1000} km");
-  print("📍 Waypoints: ${activityWaypoints.length}");
-  print("🔥 Calorie: $calories");
-  
-  // Aggiorna attività con i dati finali
-  await LocalDatabase.saveActivity({
-    'id': activityId,
-    'device_id': widget.device.remoteId.toString(),
-    'start_time': activityStartTime?.toIso8601String() ?? DateTime.now().toIso8601String(),
-    'end_time': DateTime.now().toIso8601String(),
-    'status': 'completed', // ⭐ IMPORTANTE: completed
-    'distance': totalDistance,
-    'duration': duration,
-    'calories': calories,
-  });
-  
-  // Salvo i waypoints in locale
-  if (activityWaypoints.isNotEmpty) {
-    await LocalDatabase.saveWaypoints(activityId, activityWaypoints);
+    setState(() {
+      isActivityRunning = false;
+      currentActivityId = null;
+    });
+
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ActivitySummaryScreen(activityId: activityId),
+        ),
+      );
+    }
   }
-  
-  print("💾 Attività salvata completamente in locale");
-  
-  setState(() {
-    isActivityRunning = false;
-    currentActivityId = null;
-  });
-  
-  // Navigo fino al registro attività
-  if (mounted) {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ActivitySummaryScreen(activityId: activityId),
-      ),
-    );
-  }
-}
 
-
-
-  // CONNESSIONE BLE E STREAMING
-
+  // Animazione battito
   void _triggerHeartbeat() {
     _heartbeatController.forward().then((_) => _heartbeatController.reverse());
   }
 
+  // Ascolta stato connessione dispositivo BLE
   void _listenToDeviceState() {
     _deviceStateSubscription = widget.device.connectionState.listen((state) {
       if (state == BluetoothConnectionState.disconnected) {
@@ -395,6 +390,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     });
   }
 
+  // Timer per leggere RSSI ogni 2 secondi
   void _startRssiMonitoring() {
     _rssiTimer?.cancel();
     _rssiTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
@@ -408,18 +404,21 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     });
   }
 
+  // Colore segnale RSSI
   Color _getSignalColor() {
     if (signalStrength > -60) return Colors.green;
     if (signalStrength > -75) return Colors.orange;
     return Colors.red;
   }
 
+  // Icona segnale RSSI
   IconData _getSignalIcon() {
     if (signalStrength > -60) return Icons.signal_cellular_alt;
     if (signalStrength > -75) return Icons.signal_cellular_alt_2_bar;
     return Icons.signal_cellular_alt_1_bar;
   }
 
+  // Connessione al dispositivo BLE
   Future<void> _connectToDevice() async {
     try {
       await widget.device.connect();
@@ -435,6 +434,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     }
   }
 
+  // Disconnessione dal dispositivo BLE
   Future<void> _disconnect() async {
     print('🔴 DISCONNESSIONE');
 
@@ -463,6 +463,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     }
   }
 
+  // Avvia lettura dati BLE
   Future<void> _startBleReading() async {
     try {
       List<BluetoothService> services = await widget.device.discoverServices();
@@ -498,11 +499,13 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     }
   }
 
+  // Ferma lettura dati BLE
   Future<void> _stopBleReading() async {
     await _characteristicSubscription?.cancel();
     _characteristicSubscription = null;
   }
 
+  // Avvia streaming dati via socket
   Future<void> _startStreaming() async {
     if (!isConnected) return;
     setState(() => isStreaming = true);
@@ -522,6 +525,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     }
   }
 
+  // Invia dati al server via socket
   void _sendToServer(List<int> data) {
     if (_socket == null || !_socket!.connected) return;
 
@@ -539,8 +543,8 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     _socket?.emit('heart_rate_data', message);
   }
 
+  // Ferma streaming dati
   Future<void> _stopStreaming() async {
-    // Se il widget è morto non chiamo setState
     if (mounted) {
       setState(() => isStreaming = false);
     }
@@ -549,7 +553,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     _socket = null;
   }
 
-
+  // Decodifica dati BLE per ottenere battito
   int _decodeData(List<int> data) {
     if (data.isEmpty) return 0;
     int flags = data[0];
@@ -562,6 +566,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     return 0;
   }
 
+  // Mostra messaggio toast
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -574,8 +579,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     );
   }
 
-  // UI
-
+  // Costruzione UI
   @override
   Widget build(BuildContext context) {
     final signalColor = _getSignalColor();
@@ -617,7 +621,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
         children: [
           Column(
             children: [
-              // MAPPA
+              // Mappa Apple
               Stack(
                 children: [
                   AnimatedContainer(
@@ -675,7 +679,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
                 ],
               ),
 
-              // Espandi/Comprimi
+              // Bottone espandi/comprimi mappa
               InkWell(
                 onTap: () => setState(() => isMapExpanded = !isMapExpanded),
                 child: Padding(
@@ -693,7 +697,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
                 ),
               ),
 
-              // BATTITO + BOTTONI
+              // Battito e bottoni se mappa non espansa
               if (!isMapExpanded)
                 Expanded(
                   child: SingleChildScrollView(
@@ -759,6 +763,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
             ],
           ),
 
+          // Battito sopra mappa espansa
           if (isMapExpanded)
             Positioned(
               bottom: 120,
@@ -805,6 +810,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
     );
   }
 
+  // Bottone personalizzato
   Widget _buildButton({
     required String label,
     required IconData icon,
@@ -828,8 +834,7 @@ Future<void> _stopActivity(int activityId, [double calories = 0.0]) async {
   }
 }
 
-// DIALOG DEL COUNTDOWN 
-
+// Dialog per countdown partenza attività
 class _CountdownDialog extends StatefulWidget {
   const _CountdownDialog({Key? key}) : super(key: key);
 
@@ -869,6 +874,7 @@ class __CountdownDialogState extends State<_CountdownDialog>
     super.dispose();
   }
 
+  // countdown e animazioni
   void _startCountdown() async {
     for (int i = 3; i > 0; i--) {
       if (mounted) {

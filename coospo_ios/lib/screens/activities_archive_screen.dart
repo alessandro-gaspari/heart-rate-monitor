@@ -4,8 +4,6 @@ import 'activity_summary_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-
-
 class ActivitiesArchiveScreen extends StatefulWidget {
   final String? deviceId;
 
@@ -25,22 +23,19 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
     _loadActivities();
   }
 
+  // Restituisce le ultime 4 cifre di un ID per mostrarlo in forma breve
   String _getShortId(dynamic id) {
     final idStr = id.toString();
-    if (idStr.length <= 4) {
-      return idStr;
-    }
+    if (idStr.length <= 4) return idStr;
     return idStr.substring(idStr.length - 4);
   }
 
+  // Carica le attività completate dal database locale
   Future<void> _loadActivities() async {
     setState(() => isLoading = true);
     
     try {
-      List<Map<String, dynamic>> loadedActivities;
-      
-      // ⭐ CARICA TUTTE LE ATTIVITÀ COMPLETATE (senza filtrare per device)
-      loadedActivities = await _getAllActivities();
+      final loadedActivities = await _getAllActivities();
       print("📦 Caricate ${loadedActivities.length} attività totali");
       
       setState(() {
@@ -56,20 +51,16 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
     }
   }
 
-
+  // Recupera e ordina le attività completate salvate in SharedPreferences
   Future<List<Map<String, dynamic>>> _getAllActivities() async {
     final prefs = await SharedPreferences.getInstance();
     final activitiesJson = prefs.getString('activities_cache') ?? '[]';
     final allActivities = List<Map<String, dynamic>>.from(json.decode(activitiesJson));
     
-    print("🔍 Attività nel database: ${allActivities.length}");
-    
-    // Filtra solo completate
+    // Filtra solo quelle con stato "completed"
     final completed = allActivities.where((a) => a['status'] == 'completed').toList();
     
-    print("✅ Attività completate: ${completed.length}");
-    
-    // Ordina per data
+    // Ordina dalla più recente alla più vecchia
     completed.sort((a, b) {
       final dateA = DateTime.parse(a['start_time']);
       final dateB = DateTime.parse(b['start_time']);
@@ -78,7 +69,6 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
     
     return completed;
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +91,8 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
+
+      // Mostra caricamento, messaggio vuoto o lista attività
       body: isLoading
           ? const Center(
               child: CircularProgressIndicator(
@@ -136,6 +128,7 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
     );
   }
 
+  // Costruisce la card di una singola attività
   Widget _buildActivityCard(Map<String, dynamic> activity, int index) {
     final startTime = DateTime.parse(activity['start_time']);
     final distance = (activity['distance'] ?? 0.0) / 1000;
@@ -143,8 +136,8 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
     final calories = activity['calories'] ?? 0.0;
 
     return GestureDetector(
+      // Naviga alla schermata di riepilogo attività
       onTap: () {
-        // ⭐ NAVIGA ALLA SUMMARY
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -175,12 +168,12 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Titolo e pulsante elimina
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Text(
-                    // ✅ DOPO
                     '🏃 Attività #${_getShortId(activity['id'])}',
                     style: const TextStyle(
                       color: Color.fromARGB(255, 255, 210, 31),
@@ -201,6 +194,7 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
               style: const TextStyle(color: Colors.white54, fontSize: 14),
             ),
             const SizedBox(height: 16),
+            // Dati principali dell’attività
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -215,6 +209,7 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
     );
   }
 
+  // Widget per singolo dato (es. distanza, durata, calorie)
   Widget _buildStat(String emoji, String value, String unit) {
     return Column(
       children: [
@@ -237,25 +232,24 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
     );
   }
 
+  // Formatta data e ora (es. “5 Giu 2025 • 14:32”)
   String _formatDateTime(DateTime dt) {
     final months = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year} • ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
+  // Converte i secondi in formato leggibile (es. 1h 25m)
   String _formatDuration(int seconds) {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
     final secs = seconds % 60;
     
-    if (hours > 0) {
-      return '${hours}h ${minutes}m';
-    } else if (minutes > 0) {
-      return '${minutes}m ${secs}s';
-    } else {
-      return '${secs}s';
-    }
+    if (hours > 0) return '${hours}h ${minutes}m';
+    if (minutes > 0) return '${minutes}m ${secs}s';
+    return '${secs}s';
   }
 
+  // Elimina un’attività con conferma dell’utente
   Future<void> _deleteActivity(int activityId, int index) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -284,6 +278,7 @@ class _ActivitiesArchiveScreenState extends State<ActivitiesArchiveScreen> {
       ),
     );
 
+    // Se confermato, elimina dal database e aggiorna la lista
     if (confirm == true) {
       await LocalDatabase.deleteActivity(activityId);
       setState(() {

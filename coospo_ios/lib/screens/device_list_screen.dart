@@ -6,6 +6,7 @@ import 'device_detail_screen.dart';
 import 'activities_archive_screen.dart';
 import 'profile_screen.dart';
 
+// Enum tipi dispositivi Coospo
 enum CoospoDeviceType { 
   none, 
   heartRateBand,
@@ -16,6 +17,7 @@ enum CoospoDeviceType {
   unknown
 }
 
+// Riconosce tipo dispositivo dal nome
 CoospoDeviceType getCoospoDeviceType(String deviceName) {
   deviceName = deviceName.toLowerCase();
   
@@ -62,6 +64,7 @@ CoospoDeviceType getCoospoDeviceType(String deviceName) {
   return CoospoDeviceType.unknown;
 }
 
+// Colore associato al tipo dispositivo
 Color getCoospoColor(CoospoDeviceType type) {
   switch (type) {
     case CoospoDeviceType.heartRateBand:
@@ -81,6 +84,7 @@ Color getCoospoColor(CoospoDeviceType type) {
   }
 }
 
+// Icona associata al tipo dispositivo
 IconData getCoospoIcon(CoospoDeviceType type) {
   switch (type) {
     case CoospoDeviceType.heartRateBand:
@@ -100,6 +104,7 @@ IconData getCoospoIcon(CoospoDeviceType type) {
   }
 }
 
+// Etichetta descrittiva del dispositivo
 String getCoospoLabel(CoospoDeviceType type) {
   switch (type) {
     case CoospoDeviceType.heartRateBand:
@@ -128,17 +133,17 @@ class DeviceListScreen extends StatefulWidget {
 
 class _DeviceListScreenState extends State<DeviceListScreen> 
     with SingleTickerProviderStateMixin {
-  List<ScanResult> _scanResults = [];
-  bool _isScanning = false;
-  String _gpsQuality = 'Sconosciuto';
-  Color _gpsColor = Colors.grey;
-  late AnimationController _radarController;
+  List<ScanResult> _scanResults = []; // Lista risultati scansione
+  bool _isScanning = false; // Stato scansione attiva
+  String _gpsQuality = 'Sconosciuto'; // Qualità GPS
+  Color _gpsColor = Colors.grey; // Colore indicatore GPS
+  late AnimationController _radarController; // Animazione radar
 
   @override
   void initState() {
     super.initState();
-    _requestPermissions();
-    _checkGPS();
+    _requestPermissions(); // Richiede permessi
+    _checkGPS(); // Controlla stato GPS
     
     _radarController = AnimationController(
       duration: const Duration(seconds: 1),
@@ -148,16 +153,18 @@ class _DeviceListScreenState extends State<DeviceListScreen>
 
   @override
   void dispose() {
-    _radarController.dispose();
+    _radarController.dispose(); // Pulisce controller animazione
     super.dispose();
   }
 
+  // Richiede permessi Bluetooth e localizzazione
   Future<void> _requestPermissions() async {
     await Permission.bluetoothScan.request();
     await Permission.bluetoothConnect.request();
     await Permission.location.request();
   }
 
+  // Controlla permessi e qualità GPS
   Future<void> _checkGPS() async {
     try {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -205,13 +212,14 @@ class _DeviceListScreenState extends State<DeviceListScreen>
     }
   }
 
+  // Avvia scansione dispositivi BLE
   Future<void> _startScan() async {
     setState(() {
       _scanResults.clear();
       _isScanning = true;
     });
     
-    _radarController.repeat();
+    _radarController.repeat(); // Avvia animazione radar
 
     try {
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
@@ -238,14 +246,16 @@ class _DeviceListScreenState extends State<DeviceListScreen>
     }
   }
 
+  // Ferma scansione BLE
   Future<void> _stopScan() async {
     await FlutterBluePlus.stopScan();
-    _radarController.stop();
+    _radarController.stop(); // Ferma animazione radar
     setState(() {
       _isScanning = false;
     });
   }
 
+  // Naviga alla schermata dettaglio dispositivo
   void _connectToDevice(BluetoothDevice device) {
     Navigator.push(
       context,
@@ -277,7 +287,6 @@ class _DeviceListScreenState extends State<DeviceListScreen>
             offset: const Offset(0, 50),
             onSelected: (value) {
               if (value == 'archive') {
-
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -286,7 +295,6 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                     ),
                   ),
                 );
-
               } else if (value == 'profiles') {
                 Navigator.push(
                   context,
@@ -342,6 +350,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
 
       body: Column(
         children: [
+          // Indicatore qualità GPS
           Container(
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -368,6 +377,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
             ),
           ),
           
+          // Bottone avvia scansione
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: ElevatedButton(
@@ -406,9 +416,9 @@ class _DeviceListScreenState extends State<DeviceListScreen>
             ),
           ),
           
-          
           const SizedBox(height: 20),
           
+          // Lista dispositivi trovati o messaggio vuoto
           Expanded(
             child: _scanResults.isEmpty
                 ? Center(
@@ -469,7 +479,7 @@ class _DeviceListScreenState extends State<DeviceListScreen>
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: () => _connectToDevice(device),
+                            onTap: () => _connectToDevice(device), // Vai a dettaglio dispositivo
                             borderRadius: BorderRadius.circular(16),
                             splashColor: color.withOpacity(0.2),
                             child: Padding(

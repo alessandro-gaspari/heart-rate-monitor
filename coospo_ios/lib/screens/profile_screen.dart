@@ -9,22 +9,22 @@ class ProfilesScreen extends StatefulWidget {
 }
 
 class _ProfilesScreenState extends State<ProfilesScreen> {
-  List<UserProfile> profiles = [];
-  UserProfile? activeProfile;
+  List<UserProfile> profiles = []; // Lista profili
+  UserProfile? activeProfile; // Profilo attivo
 
   @override
   void initState() {
     super.initState();
-    _loadProfiles();
+    _loadProfiles(); // Carica profili all'avvio
   }
 
   Future<void> _loadProfiles() async {
-    final loadedProfiles = await ProfileDatabase.getAllProfiles();
-    final active = await ProfileDatabase.getActiveProfile();
+    final loadedProfiles = await ProfileDatabase.getAllProfiles(); // Prendi tutti i profili
+    final active = await ProfileDatabase.getActiveProfile(); // Prendi profilo attivo
     
     setState(() {
-      profiles = loadedProfiles;
-      activeProfile = active;
+      profiles = loadedProfiles; // Aggiorna lista profili
+      activeProfile = active; // Aggiorna profilo attivo
     });
   }
 
@@ -47,7 +47,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context), // Torna indietro
         ),
       ),
       body: profiles.isEmpty
@@ -55,7 +55,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.person_outline, size: 80, color: Colors.white30),
+                  Icon(Icons.person_outline, size: 80, color: Colors.white30), // Icona vuota
                   SizedBox(height: 20),
                   Text(
                     'Nessun profilo creato',
@@ -69,13 +69,13 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
               itemCount: profiles.length,
               itemBuilder: (context, index) {
                 final profile = profiles[index];
-                final isActive = activeProfile?.id == profile.id;
+                final isActive = activeProfile?.id == profile.id; // Controlla se attivo
                 
-                return _buildProfileCard(profile, isActive);
+                return _buildProfileCard(profile, isActive); // Mostra scheda profilo
               },
             ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCreateProfileDialog(),
+        onPressed: () => _showCreateProfileDialog(), // Apre dialog nuovo profilo
         backgroundColor: const Color.fromARGB(255, 255, 210, 31),
         icon: Icon(Icons.add, color: const Color.fromARGB(255, 0, 0, 0)),
         label: Text(
@@ -86,8 +86,9 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
     );
   }
 
+  // Scheda profilo utente
   Widget _buildProfileCard(UserProfile profile, bool isActive) {
-    final canDelete = profiles.length > 1; // ⭐ Può cancellare solo se ci sono più profili
+    final canDelete = profiles.length > 1; // Si può eliminare se più di uno
     
     return Container(
       margin: EdgeInsets.only(bottom: 16),
@@ -154,26 +155,24 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
               ),
               Row(
                 children: [
-                  // ⭐ BOTTONE MODIFICA
                   IconButton(
                     icon: Icon(Icons.edit, color: Colors.white),
-                    onPressed: () => _showEditProfileDialog(profile),
+                    onPressed: () => _showEditProfileDialog(profile), // Modifica profilo
                   ),
                   if (!isActive)
                     IconButton(
                       icon: Icon(Icons.check_circle_outline, color: Colors.white54),
                       onPressed: () async {
-                        await ProfileDatabase.setActiveProfile(profile.id);
+                        await ProfileDatabase.setActiveProfile(profile.id); // Imposta profilo attivo
                         _loadProfiles();
                       },
                     ),
-                  // ⭐ BOTTONE CANCELLA (disabilitato se unico profilo)
                   IconButton(
                     icon: Icon(
                       Icons.delete,
                       color: canDelete ? Colors.red : Colors.grey,
                     ),
-                    onPressed: canDelete ? () => _deleteProfile(profile) : null,
+                    onPressed: canDelete ? () => _deleteProfile(profile) : null, // Elimina profilo
                   ),
                 ],
               ),
@@ -183,9 +182,9 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildInfoChip('Età', '${profile.age} anni'),
-              _buildInfoChip('Peso', '${profile.weight.toStringAsFixed(1)} kg'),
-              _buildInfoChip('Sesso', profile.gender == 'male' ? 'M' : 'F'),
+              _buildInfoChip('Età', '${profile.age} anni'), // Età
+              _buildInfoChip('Peso', '${profile.weight.toStringAsFixed(1)} kg'), // Peso
+              _buildInfoChip('Sesso', profile.gender == 'male' ? 'M' : 'F'), // Sesso
             ],
           ),
         ],
@@ -193,6 +192,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
     );
   }
 
+  // Chip informativo
   Widget _buildInfoChip(String label, String value) {
     return Column(
       children: [
@@ -213,7 +213,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
     );
   }
 
-  // ⭐ DIALOG MODIFICA PROFILO
+  // Dialog modifica profilo
   void _showEditProfileDialog(UserProfile profile) {
     final nameController = TextEditingController(text: profile.name);
     final ageController = TextEditingController(text: profile.age.toString());
@@ -373,7 +373,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context), // Annulla modifica
               child: Text('ANNULLA', style: TextStyle(color: Colors.white54)),
             ),
             ElevatedButton(
@@ -381,20 +381,20 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
                 if (nameController.text.isEmpty ||
                     ageController.text.isEmpty ||
                     weightController.text.isEmpty) {
-                  return;
+                  return; // Non salva se campi vuoti
                 }
 
                 final updatedProfile = UserProfile(
-                  id: profile.id, // ⭐ Mantieni stesso ID
+                  id: profile.id, // Stesso ID
                   name: nameController.text,
                   gender: selectedGender,
                   age: int.parse(ageController.text),
                   weight: double.parse(weightController.text),
                 );
 
-                await ProfileDatabase.saveProfile(updatedProfile);
+                await ProfileDatabase.saveProfile(updatedProfile); // Salva profilo
                 Navigator.pop(context);
-                _loadProfiles();
+                _loadProfiles(); // Ricarica lista
               },
               style: ElevatedButton.styleFrom(backgroundColor: Color.fromARGB(255, 255, 210, 31)),
               child: Text('SALVA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
@@ -405,9 +405,9 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
     );
   }
 
-  // ⭐ CANCELLA PROFILO (con controllo)
+  // Elimina profilo con conferma
   Future<void> _deleteProfile(UserProfile profile) async {
-    if (profiles.length == 1) {
+    if (profiles.length == 1) { // Non elimina se unico profilo
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Non puoi eliminare l\'unico profilo esistente'),
@@ -432,14 +432,14 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context), // Annulla eliminazione
             child: Text('ANNULLA', style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
             onPressed: () async {
-              await ProfileDatabase.deleteProfile(profile.id);
+              await ProfileDatabase.deleteProfile(profile.id); // Elimina profilo
               Navigator.pop(context);
-              _loadProfiles();
+              _loadProfiles(); // Ricarica lista
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: Text('ELIMINA', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -449,6 +449,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
     );
   }
 
+  // Dialog crea nuovo profilo
   void _showCreateProfileDialog() {
     final nameController = TextEditingController();
     final ageController = TextEditingController();
@@ -488,7 +489,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
                   children: [
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => setDialogState(() => selectedGender = 'male'),
+                        onTap: () => setDialogState(() => selectedGender = 'male'), // Seleziona maschio
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -530,7 +531,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: GestureDetector(
-                        onTap: () => setDialogState(() => selectedGender = 'female'),
+                        onTap: () => setDialogState(() => selectedGender = 'female'), // Seleziona femmina
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
@@ -608,7 +609,7 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context), // Annulla creazione
               child: Text('ANNULLA', style: TextStyle(color: Colors.white54)),
             ),
             ElevatedButton(
@@ -616,25 +617,25 @@ class _ProfilesScreenState extends State<ProfilesScreen> {
                 if (nameController.text.isEmpty ||
                     ageController.text.isEmpty ||
                     weightController.text.isEmpty) {
-                  return;
+                  return; // Non crea se campi vuoti
                 }
 
                 final profile = UserProfile(
-                  id: Uuid().v4(),
+                  id: Uuid().v4(), // Nuovo ID univoco
                   name: nameController.text,
                   gender: selectedGender,
                   age: int.parse(ageController.text),
                   weight: double.parse(weightController.text),
                 );
 
-                await ProfileDatabase.saveProfile(profile);
+                await ProfileDatabase.saveProfile(profile); // Salva profilo
                 
                 if (profiles.isEmpty) {
-                  await ProfileDatabase.setActiveProfile(profile.id);
+                  await ProfileDatabase.setActiveProfile(profile.id); // Imposta attivo se primo
                 }
                 
                 Navigator.pop(context);
-                _loadProfiles();
+                _loadProfiles(); // Ricarica lista
               },
               style: ElevatedButton.styleFrom(backgroundColor: Color.fromARGB(255, 255, 210, 31)),
               child: Text('SALVA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),

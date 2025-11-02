@@ -11,21 +11,22 @@ class GpsStatusWidget extends StatefulWidget {
 }
 
 class _GpsStatusWidgetState extends State<GpsStatusWidget> {
-  final GpsService _gpsService = GpsService();
-  StreamSubscription<GpsSignalQuality>? _subscription;
-  GpsSignalQuality _currentQuality = GpsSignalQuality.noSignal;
+  final GpsService _gpsService = GpsService(); // Istanza servizio GPS
+  StreamSubscription<GpsSignalQuality>? _subscription; // Subscription al stream
+  GpsSignalQuality _currentQuality = GpsSignalQuality.noSignal; // Stato iniziale
 
   @override
   void initState() {
     super.initState();
-    _gpsService.startMonitoring();
+    _gpsService.startMonitoring(); // Avvia monitoraggio GPS
     _subscription = _gpsService.signalStream.listen((quality) {
       if (mounted) {
-        setState(() => _currentQuality = quality);
+        setState(() => _currentQuality = quality); // Aggiorna stato qualità
       }
     });
   }
 
+  // Colore in base alla qualità del segnale
   Color _getStatusColor() {
     switch (_currentQuality) {
       case GpsSignalQuality.excellent:
@@ -43,6 +44,7 @@ class _GpsStatusWidgetState extends State<GpsStatusWidget> {
     }
   }
 
+  // Testo in base alla qualità del segnale
   String _getStatusText() {
     switch (_currentQuality) {
       case GpsSignalQuality.excellent:
@@ -60,6 +62,7 @@ class _GpsStatusWidgetState extends State<GpsStatusWidget> {
     }
   }
 
+  // Icona in base alla qualità del segnale
   IconData _getStatusIcon() {
     switch (_currentQuality) {
       case GpsSignalQuality.excellent:
@@ -80,11 +83,11 @@ class _GpsStatusWidgetState extends State<GpsStatusWidget> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF2C2C2C),
-        borderRadius: BorderRadius.circular(20),
+        color: const Color(0xFF2C2C2C), // Sfondo scuro
+        borderRadius: BorderRadius.circular(20), // Angoli arrotondati
         boxShadow: [
           BoxShadow(
-            color: _getStatusColor().withOpacity(0.15),
+            color: _getStatusColor().withOpacity(0.15), // Ombra colore segnale
             blurRadius: 8,
             spreadRadius: 1,
           ),
@@ -94,7 +97,7 @@ class _GpsStatusWidgetState extends State<GpsStatusWidget> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            _getStatusIcon(),
+            _getStatusIcon(), // Icona segnale
             size: 20,
             color: _getStatusColor(),
           ),
@@ -112,7 +115,7 @@ class _GpsStatusWidgetState extends State<GpsStatusWidget> {
             height: 12,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _getStatusColor(),
+              color: _getStatusColor(), // Cerchio colorato segnale
               boxShadow: [
                 BoxShadow(
                   color: _getStatusColor().withOpacity(0.3),
@@ -124,7 +127,7 @@ class _GpsStatusWidgetState extends State<GpsStatusWidget> {
           ),
           const SizedBox(width: 8),
           Text(
-            _getStatusText(),
+            _getStatusText(), // Testo qualità segnale
             style: GoogleFonts.montserrat(
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -138,8 +141,8 @@ class _GpsStatusWidgetState extends State<GpsStatusWidget> {
 
   @override
   void dispose() {
-    _subscription?.cancel();
-    _gpsService.dispose();
+    _subscription?.cancel(); // Cancella subscription
+    _gpsService.dispose(); // Ferma servizio GPS
     super.dispose();
   }
 }

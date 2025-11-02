@@ -12,17 +12,17 @@ enum GpsSignalQuality {
 
 class GpsService {
   static final GpsService _instance = GpsService._internal();
-  factory GpsService() => _instance;
+  factory GpsService() => _instance; // Singleton
   GpsService._internal();
 
-  final _signalController = StreamController<GpsSignalQuality>.broadcast();
+  final _signalController = StreamController<GpsSignalQuality>.broadcast(); // Stream qualità segnale
   Timer? _updateTimer;
   Stream<GpsSignalQuality> get signalStream => _signalController.stream;
 
   void startMonitoring() {
-    _updateTimer?.cancel();
+    _updateTimer?.cancel(); // Ferma timer precedente
     _updateTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      _checkSignalQuality();
+      _checkSignalQuality(); // Controlla qualità segnale ogni 500 ms
     });
   }
 
@@ -30,12 +30,12 @@ class GpsService {
     try {
       final Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.best,
-        timeLimit: const Duration(seconds: 2),
+        timeLimit: const Duration(seconds: 2), // Timeout 2s
       );
 
       if (!_signalController.isClosed) {
-        // Valutazione più dettagliata della qualità del segnale
-        if (position.accuracy <= 4 && position.speed != Null) {
+        // Valuta qualità segnale in base a precisione e velocità
+        if (position.accuracy <= 4) {
           _signalController.add(GpsSignalQuality.excellent);
         } else if (position.accuracy <= 6) {
           _signalController.add(GpsSignalQuality.good);
@@ -49,13 +49,13 @@ class GpsService {
       }
     } catch (e) {
       if (!_signalController.isClosed) {
-        _signalController.add(GpsSignalQuality.noSignal);
+        _signalController.add(GpsSignalQuality.noSignal); // Nessun segnale
       }
     }
   }
 
   void dispose() {
-    _updateTimer?.cancel();
-    _signalController.close();
+    _updateTimer?.cancel(); // Ferma timer
+    _signalController.close(); // Chiude stream
   }
 }

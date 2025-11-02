@@ -3,42 +3,38 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class BluetoothService {
   static final BluetoothService _instance = BluetoothService._internal();
-  factory BluetoothService() => _instance;
+  factory BluetoothService() => _instance; // Singleton
   BluetoothService._internal();
 
-  final Map<String, StreamSubscription> _connectionSubscriptions = {};
-  final Map<String, BluetoothDevice> _connectedDevices = {};
+  final Map<String, StreamSubscription> _connectionSubscriptions = {}; // Subscription connessioni
+  final Map<String, BluetoothDevice> _connectedDevices = {}; // Dispositivi connessi
 
-  // Verifica se ci sono dispositivi connessi
+  // Controlla se ci sono dispositivi connessi
   bool get hasConnectedDevices => _connectedDevices.isNotEmpty;
   List<BluetoothDevice> get connectedDevices => _connectedDevices.values.toList();
 
-  /// Connette a un dispositivo BLE con retry automatico
+  // Connette a dispositivo BLE con tentativi e timeout
   Future<bool> connectToDevice(BluetoothDevice device) async {
     try {
-      // Ferma scansione se attiva
-      await FlutterBluePlus.stopScan();
+      await FlutterBluePlus.stopScan(); // Ferma scansione attiva
       await Future.delayed(const Duration(milliseconds: 300));
 
-      // Pulisci eventuali connessioni precedenti
-      await _cleanupExistingConnection(device);
+      await _cleanupExistingConnection(device); // Pulisce connessioni precedenti
 
-      // Verifica se già connesso
       final initialState = await device.connectionState.first;
       if (initialState == BluetoothConnectionState.connected) {
         print('✅ Dispositivo già connesso');
-        _setupConnectionMonitoring(device);
+        _setupConnectionMonitoring(device); // Monitora connessione
         return true;
       }
 
-      // Connetti con timeout
       print('🔌 Connessione a ${device.platformName}...');
       await device.connect(
         timeout: const Duration(seconds: 15),
         autoConnect: false,
       );
 
-      // Attendi conferma connessione
+      // Attende conferma connessione con max 10 tentativi
       bool connected = false;
       int attempts = 0;
       while (!connected && attempts < 10) {
@@ -57,28 +53,25 @@ class BluetoothService {
 
       print('✅ Dispositivo connesso');
 
-      // Scopri servizi (importante per mantenere connessione stabile)
-      await device.discoverServices();
+      await device.discoverServices(); // Scopri servizi
 
-      // Monitora connessione
-      _setupConnectionMonitoring(device);
+      _setupConnectionMonitoring(device); // Monitora connessione
 
       return true;
     } catch (e) {
       print('❌ Errore connessione: $e');
       try {
-        await device.disconnect();
+        await device.disconnect(); // Disconnetti in caso di errore
       } catch (_) {}
       return false;
     }
   }
 
-  /// Disconnette un dispositivo BLE con pulizia forzata
+  // Disconnette dispositivo con timeout forzato
   Future<void> disconnectFromDevice(BluetoothDevice device) async {
     print('🔴 Disconnessione ${device.platformName}...');
     
     try {
-      // Disconnetti con timeout forzato
       await device.disconnect(timeout: 5).timeout(
         const Duration(seconds: 5),
         onTimeout: () {
@@ -89,21 +82,19 @@ class BluetoothService {
     } catch (e) {
       print('⚠️ Errore disconnect (ignorato): $e');
     } finally {
-      _cleanupDevice(device);
+      _cleanupDevice(device); // Pulisce risorse
     }
   }
 
-  /// Pulisce connessioni esistenti prima di riconnettere
+  // Pulisce connessioni esistenti prima di nuova connessione
   Future<void> _cleanupExistingConnection(BluetoothDevice device) async {
     try {
-      // Cancella subscription precedente
-      await _connectionSubscriptions[device.remoteId.str]?.cancel();
+      await _connectionSubscriptions[device.remoteId.str]?.cancel(); // Cancella subscription
       _connectionSubscriptions.remove(device.remoteId.str);
 
-      // Se già connesso, disconnetti
       if (_connectedDevices.containsKey(device.remoteId.str)) {
         try {
-          await device.disconnect().timeout(const Duration(seconds: 2));
+          await device.disconnect().timeout(const Duration(seconds: 2)); // Disconnetti se connesso
         } catch (_) {}
         _connectedDevices.remove(device.remoteId.str);
       }
@@ -112,7 +103,7 @@ class BluetoothService {
     } catch (_) {}
   }
 
-  /// Monitora lo stato della connessione
+  // Monitora stato connessione del dispositivo
   void _setupConnectionMonitoring(BluetoothDevice device) {
     _connectionSubscriptions[device.remoteId.str] = device.connectionState.listen(
       (state) {
@@ -120,31 +111,31 @@ class BluetoothService {
         
         if (state == BluetoothConnectionState.disconnected) {
           print('⚠️ Dispositivo disconnesso');
-          _cleanupDevice(device);
+          _cleanupDevice(device); // Pulisce risorse su disconnessione
         }
       },
       onError: (error) {
         print('❌ Errore stato connessione: $error');
-        _cleanupDevice(device);
+        _cleanupDevice(device); // Pulisce risorse su errore
       },
     );
     
-    _connectedDevices[device.remoteId.str] = device;
+    _connectedDevices[device.remoteId.str] = device; // Aggiunge dispositivo connesso
   }
 
-  /// Pulisce risorse di un dispositivo
+  // Pulisce risorse associate al dispositivo
   void _cleanupDevice(BluetoothDevice device) {
     _connectionSubscriptions[device.remoteId.str]?.cancel();
     _connectionSubscriptions.remove(device.remoteId.str);
     _connectedDevices.remove(device.remoteId.str);
   }
 
-  /// Verifica se un dispositivo è connesso
+  // Verifica se dispositivo è connesso
   bool isDeviceConnected(BluetoothDevice device) {
     return _connectedDevices.containsKey(device.remoteId.str);
   }
 
-  /// Pulisce tutte le connessioni (chiamare in dispose dell'app)
+  // Pulisce tutte le connessioni (da chiamare in dispose app)
   void dispose() {
     print('🧹 Pulizia BluetoothService...');
     

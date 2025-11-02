@@ -9,10 +9,10 @@ class WelcomeProfileScreen extends StatefulWidget {
 }
 
 class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
-  final nameController = TextEditingController();
-  final ageController = TextEditingController();
-  final weightController = TextEditingController();
-  String selectedGender = 'male';
+  final nameController = TextEditingController(); // Controller nome
+  final ageController = TextEditingController(); // Controller età
+  final weightController = TextEditingController(); // Controller peso
+  String selectedGender = 'male'; // Genere selezionato
 
   @override
   Widget build(BuildContext context) {
@@ -25,15 +25,16 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 40),
-              
-              // Emoji per il benvenuto
+
+              // Emoji benvenuto
               const Text(
                 '👋',
                 style: TextStyle(fontSize: 80),
               ),
-              
+
               const SizedBox(height: 20),
-              
+
+              // Titolo benvenuto
               const Text(
                 'Benvenuto!',
                 textAlign: TextAlign.center,
@@ -44,9 +45,10 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
                   fontFamily: 'SF Pro Display',
                 ),
               ),
-              
+
               const SizedBox(height: 12),
-              
+
+              // Descrizione
               const Text(
                 'Crea il tuo profilo per iniziare\na tracciare le tue attività',
                 textAlign: TextAlign.center,
@@ -56,10 +58,10 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
                   height: 1.5,
                 ),
               ),
-              
+
               const SizedBox(height: 40),
-              
-              // Nome
+
+              // Campo testo nome
               TextField(
                 controller: nameController,
                 style: const TextStyle(color: Colors.white, fontSize: 18),
@@ -77,10 +79,10 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
-              // Selezione genere con icone
+
+              // Label genere
               const Text(
                 'Genere',
                 style: TextStyle(
@@ -89,14 +91,15 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              
+
               const SizedBox(height: 12),
-              
+
+              // Selezione genere con icone
               Row(
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => setState(() => selectedGender = 'male'),
+                      onTap: () => setState(() => selectedGender = 'male'), // Seleziona maschio
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         decoration: BoxDecoration(
@@ -135,12 +138,12 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(width: 16),
-                  
+
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => setState(() => selectedGender = 'female'),
+                      onTap: () => setState(() => selectedGender = 'female'), // Seleziona femmina
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 20),
                         decoration: BoxDecoration(
@@ -181,10 +184,10 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 24),
-              
-              // Età
+
+              // Campo testo età
               TextField(
                 controller: ageController,
                 keyboardType: TextInputType.number,
@@ -203,10 +206,10 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
-              // Peso
+
+              // Campo testo per il peso
               TextField(
                 controller: weightController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -225,14 +228,14 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 40),
-              
+
               // Bottone Inizia
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _createProfile,
+                  onPressed: _createProfile, // Crea profilo
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color.fromARGB(255, 255, 210, 31),
                     foregroundColor: Colors.black,
@@ -266,7 +269,7 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
         weightController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Compila tutti i campi'),
+          content: Text('Compila tutti i campi'), // Messaggio errore
           backgroundColor: Colors.red,
         ),
       );
@@ -274,18 +277,18 @@ class _WelcomeProfileScreenState extends State<WelcomeProfileScreen> {
     }
 
     final profile = UserProfile(
-      id: const Uuid().v4(),
+      id: const Uuid().v4(), // Nuovo id unico
       name: nameController.text,
       gender: selectedGender,
       age: int.parse(ageController.text),
       weight: double.parse(weightController.text),
     );
 
-    await ProfileDatabase.saveProfile(profile);
-    await ProfileDatabase.setActiveProfile(profile.id);
+    await ProfileDatabase.saveProfile(profile); // Salva profilo
+    await ProfileDatabase.setActiveProfile(profile.id); // Imposta profilo attivo
 
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, '/home'); // Naviga a home
     }
   }
 }

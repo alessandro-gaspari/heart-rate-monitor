@@ -1,10 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:apple_maps_flutter/apple_maps_flutter.dart';
-import 'dart:async';
-import '../database/local_db.dart';
+// Import dei pacchetti necessari
+import 'package:flutter/material.dart'; // UI di Flutter
+import 'package:apple_maps_flutter/apple_maps_flutter.dart'; // Mappa Apple
+import 'dart:async'; // Supporto per funzioni asincrone
+import '../database/local_db.dart'; // Database locale dell’app
 
+// Widget principale per visualizzare il riepilogo dell’attività
 class ActivitySummaryScreen extends StatefulWidget {
-  final int activityId;
+  final int activityId; // ID dell’attività da visualizzare
 
   const ActivitySummaryScreen({Key? key, required this.activityId}) : super(key: key);
 
@@ -12,30 +14,34 @@ class ActivitySummaryScreen extends StatefulWidget {
   _ActivitySummaryScreenState createState() => _ActivitySummaryScreenState();
 }
 
+// Stato del widget ActivitySummaryScreen
 class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
-  bool isLoading = true;
-  Map<String, dynamic>? activityData;
-  List<Map<String, dynamic>> waypoints = [];
-  String? errorMessage;
+  bool isLoading = true; // Stato caricamento
+  Map<String, dynamic>? activityData; // Dati dell’attività
+  List<Map<String, dynamic>> waypoints = []; // Lista dei punti GPS
+  String? errorMessage; // Eventuale messaggio di errore
   
-  AppleMapController? mapController;
-  Set<Polyline> polylines = {};
+  AppleMapController? mapController; // Controller per la mappa
+  Set<Polyline> polylines = {}; // Polilinee da disegnare sulla mappa
 
   @override
   void initState() {
     super.initState();
-    _loadActivityData();
+    _loadActivityData(); // Carica i dati all’avvio
   }
 
+  // Funzione per caricare i dati dell’attività dal database locale
   Future<void> _loadActivityData() async {
-    setState(() => isLoading = true);
+    setState(() => isLoading = true); // Mostra loader
 
     try {
       print("📥 Caricamento attività ${widget.activityId}...");
       
+      // Richiama il database locale
       final localActivity = await LocalDatabase.getActivityWithWaypoints(widget.activityId);
       
       if (localActivity != null) {
+        // Debug dei dati caricati
         print("✅ Attività caricata: ${localActivity['id']}");
         print("📦 Dati attività: $localActivity");
         print("📍 Waypoints totali: ${localActivity['waypoints']?.length ?? 0}");
@@ -44,10 +50,11 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
         
         setState(() {
           activityData = localActivity;
-          waypoints = List<Map<String, dynamic>>.from(waypointsList);
+          waypoints = List<Map<String, dynamic>>.from(waypointsList); // Assicura tipo corretto
           isLoading = false;
         });
         
+        // Se ci sono waypoints costruisce le polilinee
         if (waypoints.isNotEmpty) {
           print("🗺️ Waypoints disponibili, costruisco mappa...");
           _buildPolyline();
@@ -62,6 +69,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
         });
       }
     } catch (e, stackTrace) {
+      // Gestione errore caricamento
       print("❌ Errore caricamento: $e");
       print("Stack trace: $stackTrace");
       setState(() {
@@ -71,6 +79,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
     }
   }
 
+  // Funzione per creare le polilinee colorate in base al battito
   void _buildPolyline() {
     if (waypoints.isEmpty) return;
 
@@ -78,15 +87,17 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
     
     Set<Polyline> polylineSet = {};
     
+    // Ciclo tra tutti i punti per creare segmenti
     for (int i = 0; i < waypoints.length - 1; i++) {
       final currentWaypoint = waypoints[i];
       final nextWaypoint = waypoints[i + 1];
       
-      final currentHR = currentWaypoint['heart_rate'] ?? 0;
-      
+      final currentHR = currentWaypoint['heart_rate'] ?? 0; // Frequenza cardiaca
+
+      // Colore della polyline in base al battito
       Color segmentColor;
       if (currentHR == 0) {
-        segmentColor = const Color.fromARGB(255, 255, 210, 31); // Giallo se no dati
+        segmentColor = const Color.fromARGB(255, 255, 210, 31); // Giallo se dati mancanti
       } else if (currentHR < 100) {
         segmentColor = Colors.green;
       } else if (currentHR < 140) {
@@ -95,6 +106,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
         segmentColor = Colors.red;
       }
       
+      // Coordinate della linea tra i due waypoint
       final segmentPoints = [
         LatLng(
           currentWaypoint['latitude'] as double,
@@ -118,6 +130,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
     
     print("✅ Creati ${polylineSet.length} segmenti colorati");
     
+    // Aggiorna lo stato con le polilinee
     if (mounted) {
       setState(() {
         polylines = polylineSet;
@@ -125,8 +138,10 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
     }
   }
 
+  // Costruzione interfaccia utente
   @override
   Widget build(BuildContext context) {
+    // Mostra loader se ancora caricamento
     if (isLoading) {
       return Scaffold(
         backgroundColor: const Color.fromARGB(255, 0, 0, 0),
@@ -138,6 +153,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
       );
     }
 
+    // Mostra messaggio di errore se presente
     if (errorMessage != null || activityData == null) {
       return Scaffold(
         backgroundColor: const Color.fromARGB(255, 0, 0, 0),
@@ -178,13 +194,14 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
       );
     }
 
-    final distance = (activityData!['distance'] ?? 0.0) / 1000;
-    final duration = activityData!['duration'] ?? 0;
-    final calories = activityData!['calories'] ?? 0.0;
+    // Calcolo dati principali
+    final distance = (activityData!['distance'] ?? 0.0) / 1000; // km
+    final duration = activityData!['duration'] ?? 0; // secondi
+    final calories = activityData!['calories'] ?? 0.0; // kcal
 
-    // Calcola PASSO (min/km) invece di velocità
+    // Calcola passo (min/km)
     String pace = '--:--';
-    if (distance > 0.01 && duration > 0) {  //almeno 10 metri
+    if (distance > 0.01 && duration > 0) {  // almeno 10 metri
       final paceMinutes = duration / 60 / distance;
       
       if (paceMinutes < 100) {
@@ -196,11 +213,13 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
       }
     }
 
+    // Lista dei battiti validi
     final heartRates = waypoints
         .where((w) => w['heart_rate'] != null && w['heart_rate'] > 0)
         .map((w) => w['heart_rate'] as int)
         .toList();
     
+    // Media, max e min del battito
     final avgHeartRate = heartRates.isNotEmpty
         ? (heartRates.reduce((a, b) => a + b) / heartRates.length).round()
         : 0;
@@ -209,6 +228,7 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
 
     print("📊 Stats - Distance: $distance km, Duration: $duration s, Waypoints: ${waypoints.length}");
 
+    // Inizio costruzione Scaffold principale
     return Scaffold(
       backgroundColor: const Color.fromARGB(255, 0, 0, 0),
       appBar: AppBar(
@@ -229,108 +249,109 @@ class _ActivitySummaryScreenState extends State<ActivitySummaryScreen> {
         child: Column(
           children: [
 
-// MAPPA
-if (waypoints.length >= 2)
-  Stack(
-    children: [
-      Container(
-        height: 300,
-        margin: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.3),
-              blurRadius: 10,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: AbsorbPointer( // Disabilita interazioni mappa sulla preview
-            child: AppleMap(
-              onMapCreated: (controller) {
-                mapController = controller;
-                Future.delayed(const Duration(milliseconds: 500), () {
-                  _fitMapToBounds();
-                });
-              },
-              initialCameraPosition: CameraPosition(
-                target: LatLng(
-                  waypoints.first['latitude'] as double,
-                  waypoints.first['longitude'] as double,
+            // MAPPA
+            if (waypoints.length >= 2)
+              Stack(
+                children: [
+                  Container(
+                    height: 300,
+                    margin: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.3),
+                          blurRadius: 10,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: AbsorbPointer( // Disabilita interazioni mappa
+                        child: AppleMap(
+                          onMapCreated: (controller) {
+                            mapController = controller;
+                            Future.delayed(const Duration(milliseconds: 500), () {
+                              _fitMapToBounds();
+                            });
+                          },
+                          initialCameraPosition: CameraPosition(
+                            target: LatLng(
+                              waypoints.first['latitude'] as double,
+                              waypoints.first['longitude'] as double,
+                            ),
+                            zoom: 15.0,
+                          ),
+                          polylines: polylines,
+                          myLocationEnabled: false,
+                          compassEnabled: false,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // bottone fullscreen
+                  Positioned(
+                    top: 30,
+                    right: 30,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(255, 255, 210, 31),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.6),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.fullscreen, color: Colors.black),
+                        iconSize: 24,
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => _FullScreenMap(
+                                waypoints: waypoints,
+                                polylines: polylines,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Container(
+                height: 200,
+                margin: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color.fromARGB(255, 30, 30, 30),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                zoom: 15.0,
-              ),
-              polylines: polylines,
-              myLocationEnabled: false,
-              compassEnabled: false,
-            ),
-          ),
-        ),
-      ),
-      // bottone per il fullscreen in alto a destra
-      Positioned(
-        top: 30,
-        right: 30,
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color.fromARGB(255, 255, 210, 31),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: const Color.fromARGB(255, 255, 210, 31).withOpacity(0.6),
-                blurRadius: 12,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: IconButton(
-            icon: const Icon(Icons.fullscreen, color: Colors.black),
-            iconSize: 24,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => _FullScreenMap(
-                    waypoints: waypoints,
-                    polylines: polylines,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.map_outlined, size: 60, color: Colors.white30),
+                      const SizedBox(height: 10),
+                      Text(
+                        waypoints.length == 1 
+                            ? 'Attività troppo breve\nMuoviti per registrare il percorso'
+                            : 'Nessun percorso registrato',
+                        style: const TextStyle(color: Colors.white54, fontSize: 14),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
-          ),
-        ),
-      ),
-    ],
-  )
-else
-  Container(
-    height: 200,
-    margin: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: const Color.fromARGB(255, 30, 30, 30),
-      borderRadius: BorderRadius.circular(20),
-    ),
-    child: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.map_outlined, size: 60, color: Colors.white30),
-          const SizedBox(height: 10),
-          Text(
-            waypoints.length == 1 
-                ? 'Attività troppo breve\nMuoviti per registrare il percorso'
-                : 'Nessun percorso registrato',
-            style: const TextStyle(color: Colors.white54, fontSize: 14),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    ),
-  ),
+              ),
 
+            // Legenda BPM
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 2),
               child: Text(
@@ -343,11 +364,10 @@ else
               ),
             ),
 
-            // LEGENDA
+            // LEGENDA COLORI
             if (waypoints.isNotEmpty && heartRates.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -360,7 +380,7 @@ else
                 ),
               ),
 
-            // STATISTICHE PRINCIPALI
+            // STATISTICHE
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
@@ -464,6 +484,7 @@ else
         ),
       ),
 
+      // BOTTONE CHIUDI
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
         decoration: const BoxDecoration(
@@ -474,7 +495,7 @@ else
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () {
-                // Torna alla DeviceListScreen
+                // Torna alla prima schermata
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
               style: ElevatedButton.styleFrom(
@@ -502,6 +523,7 @@ else
     
   }
 
+  // Widget per le card statistiche
   Widget _buildStatCard({
     required IconData icon,
     required String label,
@@ -561,6 +583,7 @@ else
     );
   }
 
+  // Widget per statistiche battito
   Widget _buildHeartStat(String label, int value) {
     return Column(
       children: [
@@ -579,6 +602,7 @@ else
     );
   }
 
+  // Legenda colore battito
   Widget _buildLegendItem(String label, Color color) {
     return Row(
       children: [
@@ -599,6 +623,7 @@ else
     );
   }
 
+  // Formatta durata in h/m/s
   String _formatDuration(int seconds) {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
@@ -612,6 +637,7 @@ else
     }
   }
 
+  // Centra la mappa in base ai waypoints
   void _fitMapToBounds() {
     if (waypoints.isEmpty || mapController == null) return;
 
@@ -643,8 +669,7 @@ else
   
 }
 
-// MAPPA A SCHERMO INTERO
-
+// MAPPA SCHERMO INTERO
 class _FullScreenMap extends StatefulWidget {
   final List<Map<String, dynamic>> waypoints;
   final Set<Polyline> polylines;
