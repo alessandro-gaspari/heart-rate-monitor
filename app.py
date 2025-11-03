@@ -331,7 +331,7 @@ def stop_activity():
             lat1, lon1 = waypoints[i-1]
             lat2, lon2 = waypoints[i]
             
-            # Calcolo distanza Haversine
+            # Calcolo distanza Haversine (dati 2 punti su una sfera trovo la loro distanza minima)
             from math import radians, cos, sin, asin, sqrt
             lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
             dlon = lon2 - lon1

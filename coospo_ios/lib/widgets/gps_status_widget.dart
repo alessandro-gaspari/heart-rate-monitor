@@ -30,17 +30,17 @@ class _GpsStatusWidgetState extends State<GpsStatusWidget> {
   Color _getStatusColor() {
     switch (_currentQuality) {
       case GpsSignalQuality.excellent:
-        return const Color(0xFF00E676); // Verde brillante
+        return const Color(0xFF00E676); 
       case GpsSignalQuality.good:
-        return const Color(0xFF69F0AE); // Verde chiaro
+        return const Color(0xFF69F0AE); 
       case GpsSignalQuality.moderate:
-        return const Color(0xFFFFEB3B); // Giallo
+        return const Color(0xFFFFEB3B);
       case GpsSignalQuality.weak:
-        return const Color(0xFFFFB74D); // Arancione
+        return const Color(0xFFFFB74D); 
       case GpsSignalQuality.veryWeak:
-        return const Color(0xFFFF9100); // Arancione scuro
+        return const Color(0xFFFF9100); 
       case GpsSignalQuality.noSignal:
-        return const Color(0xFFFF5252); // Rosso
+        return const Color(0xFFFF5252); 
     }
   }
 

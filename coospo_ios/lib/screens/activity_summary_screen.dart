@@ -1,8 +1,7 @@
-// Import dei pacchetti necessari
-import 'package:flutter/material.dart'; // UI di Flutter
+import 'package:flutter/material.dart'; 
 import 'package:apple_maps_flutter/apple_maps_flutter.dart'; // Mappa Apple
-import 'dart:async'; // Supporto per funzioni asincrone
-import '../database/local_db.dart'; // Database locale dell’app
+import 'dart:async';
+import '../database/local_db.dart';
 
 // Widget principale per visualizzare il riepilogo dell’attività
 class ActivitySummaryScreen extends StatefulWidget {

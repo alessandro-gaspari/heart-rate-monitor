@@ -12,7 +12,7 @@ enum GpsSignalQuality {
 
 class GpsService {
   static final GpsService _instance = GpsService._internal();
-  factory GpsService() => _instance; // Singleton
+  factory GpsService() => _instance;
   GpsService._internal();
 
   final _signalController = StreamController<GpsSignalQuality>.broadcast(); // Stream qualità segnale

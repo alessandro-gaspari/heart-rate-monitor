@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 
 class BackgroundService with WidgetsBindingObserver {
   static final BackgroundService _instance = BackgroundService._internal();
-  factory BackgroundService() => _instance; // Singleton
+  factory BackgroundService() => _instance;
   BackgroundService._internal();
 
   Function? onAppInBackground; // Callback background
@@ -37,7 +37,7 @@ class BackgroundService with WidgetsBindingObserver {
         print('📱 APP DETACHED');
         break;
       case AppLifecycleState.hidden:
-        // App nascosta (caso raro)
+        // App nascosta
         print('📱 APP HIDDEN');
         break;
     }
