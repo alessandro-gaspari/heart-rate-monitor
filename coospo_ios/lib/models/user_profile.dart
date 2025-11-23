@@ -20,10 +20,28 @@ class UserProfile {
   double get ageFactor => 1 - 0.005 * (age - 30);
 
   // Calcola le calorie bruciate in base a distanza, peso e velocità media
-  double calculateCalories(double distanceKm, double avgSpeedKmh) {
-    return distanceKm * weight *
-           ((0.035 + 0.029 * (avgSpeedKmh / 10)) * genderFactor * ageFactor);
+double calculateCalories(double distanceKm, double avgSpeedKmh, double durationSeconds) {
+  double met;
+  if (avgSpeedKmh < 4) {
+    met = 2.5;
+  } else if (avgSpeedKmh < 6) {
+    met = 3.5;
+  } else if (avgSpeedKmh < 8) {
+    met = 5.0;
+  } else if (avgSpeedKmh < 10) {
+    met = 8.3;
+  } else if (avgSpeedKmh < 12) {
+    met = 10.0;
+  } else if (avgSpeedKmh < 15) {
+    met = 12.3;
+  } else {
+    met = 15.0;
   }
+
+  double hours = durationSeconds / 3600;
+
+  return met * weight * hours * genderFactor * ageFactor;
+}
 
   // Converte l’oggetto in formato JSON
   Map<String, dynamic> toJson() {

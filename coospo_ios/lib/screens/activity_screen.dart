@@ -107,7 +107,9 @@ class _ActivityScreenState extends State<ActivityScreen> {
           totalDistance += distance / 1000; // km
           final elapsed = DateTime.now().difference(startTime).inSeconds;
           if (totalDistance > 0 && elapsed > 0) {
-            avgSpeed = (elapsed / 60) / totalDistance; // min/km
+            avgSpeed = totalDistance > 0
+              ? (elapsed / 60) / totalDistance  // minuti per km = pace
+              : 0;
           }
         }
         lastPosition = pos;
@@ -131,11 +133,20 @@ class _ActivityScreenState extends State<ActivityScreen> {
   // Calcola calorie consumate
   void _calculateCalories() {
     if (activeProfile == null || totalDistance == 0) return;
+
     final elapsed = DateTime.now().difference(startTime).inSeconds;
     if (elapsed == 0) return;
 
+    // Velocità media vera in km/h
     final avgSpeedKmh = totalDistance / (elapsed / 3600);
-    final calculated = activeProfile!.calculateCalories(totalDistance, avgSpeedKmh);
+
+    // Calcolo calorie corretto
+    final calculated = activeProfile!.calculateCalories(
+      totalDistance,    // km
+      avgSpeedKmh,      // km/h
+      elapsed.toDouble(), // secondi
+    );
+
     if (mounted) setState(() => calories = calculated);
   }
 
