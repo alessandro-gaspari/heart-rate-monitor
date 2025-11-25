@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'activity_screen.dart';
 import 'activity_summary_screen.dart';
 import '../database/local_db.dart';
+import '../utils/tcp_client.dart';
 
 // Tipi di dispositivi Coospo
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
@@ -68,6 +69,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   double totalDistance = 0.0;
   int waypointCount = 0;
   DateTime? activityStartTime;
+  TCPDataSender? _tcpSender;
 
   // Storico dati locali
   final List<int> heartRateHistory = [];
@@ -128,6 +130,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     _deviceStateSubscription?.cancel();
     positionStream?.cancel();
     waypointTimer?.cancel();
+    _tcpSender?.disconnect();
+
     super.dispose();
   }
 
@@ -519,28 +523,47 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       _socket?.onConnect((_) => print('✅ Socket.IO connesso'));
       _socket?.onDisconnect((_) => print('⚠️ Socket disconnesso'));
       _socket?.onError((error) => print('❌ Errore Socket.IO: $error'));
+
+      _tcpSender = TCPDataSender();
+      await _tcpSender?.connect();
     } catch (e) {
       print('❌ ERRORE STREAMING: $e');
       await _stopStreaming();
     }
   }
 
-  // Invia dati al server via socket
+  // Invia dati al server via socket E TCP
   void _sendToServer(List<int> data) {
-    if (_socket == null || !_socket!.connected) return;
-
-    final encoded = base64.encode(data);
     final deviceTypeStr = deviceType.toString().split('.').last;
-
-    final message = {
-      'device_type': deviceTypeStr,
-      'device_id': widget.device.platformName,
-      'data': encoded,
-      'latitude': currentPosition?.latitude,
-      'longitude': currentPosition?.longitude,
-    };
-
-    _socket?.emit('heart_rate_data', message);
+    final hrValue = _decodeData(data);
+    
+    // ✅ INVIA A RENDER (Socket.IO) - come prima
+    if (_socket != null && _socket!.connected) {
+      final encoded = base64.encode(data);
+      final message = {
+        'device_type': deviceTypeStr,
+        'device_id': widget.device.platformName,
+        'data': encoded,
+        'latitude': currentPosition?.latitude,
+        'longitude': currentPosition?.longitude,
+      };
+      _socket?.emit('heart_rate_data', message);
+    }
+    
+    // ✅ INVIA A SERVER SSH (TCP) - NUOVO
+    if (_tcpSender != null && _tcpSender!.isConnected && hrValue > 0) {
+      final hrData = {
+        'device_type': deviceTypeStr,
+        'heart_rate': hrValue,
+        'latitude': currentPosition?.latitude,
+        'longitude': currentPosition?.longitude,
+      };
+      
+      _tcpSender!.sendData(
+        widget.device.platformName,
+        hrData,
+      );
+    }
   }
 
   // Ferma streaming dati
@@ -551,6 +574,9 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
+
+    _tcpSender?.disconnect();
+    _tcpSender = null;
   }
 
   // Decodifica dati BLE per ottenere battito
