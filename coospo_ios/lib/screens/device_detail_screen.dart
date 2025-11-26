@@ -11,6 +11,7 @@ import 'activity_screen.dart';
 import 'activity_summary_screen.dart';
 import '../database/local_db.dart';
 import '../utils/tcp_client.dart';
+import '../database/profili_db.dart';
 
 // Tipi di dispositivi Coospo
 enum CoospoDeviceType { none, heartRateBand, armband, unknown }
@@ -70,6 +71,8 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
   int waypointCount = 0;
   DateTime? activityStartTime;
   TCPDataSender? _tcpSender;
+  String? activeUserName;
+  String? activeUserId;
 
   // Storico dati locali
   final List<int> heartRateHistory = [];
@@ -109,9 +112,47 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
+    _loadActiveUser();
     _listenToDeviceState();
     _startTracking();
   }
+
+  // ✅ AGGIUNGI QUESTA FUNZIONE COMPLETA
+  Future<void> _loadActiveUser() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Prova a caricare utente attivo da SharedPreferences
+      final userId = prefs.getString('active_user_id');
+      final userName = prefs.getString('active_user_name');
+      
+      if (userId != null && userName != null) {
+        setState(() {
+          activeUserId = userId;
+          activeUserName = userName;
+        });
+        print('👤 Utente attivo: $userName (ID: $userId)');
+      } else {
+        // Se non c'è utente in SharedPreferences, prendi da database
+        final activeProfile = await ProfileDatabase.getActiveProfile();
+        if (activeProfile != null) {
+          setState(() {
+            activeUserId = activeProfile.id;
+            activeUserName = activeProfile.name;
+          });
+          
+          // Salva anche in SharedPreferences per future volte
+          await prefs.setString('active_user_id', activeProfile.id);
+          await prefs.setString('active_user_name', activeProfile.name);
+          
+          print('👤 Utente attivo caricato dal DB: ${activeProfile.name}');
+        }
+      }
+    } catch (e) {
+      print('❌ Errore caricamento utente: $e');
+    }
+  }
+
 
   @override
   void dispose() {
@@ -537,26 +578,32 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
     final deviceTypeStr = deviceType.toString().split('.').last;
     final hrValue = _decodeData(data);
     
-    // ✅ INVIA A RENDER (Socket.IO) - come prima
+    // INVIA A RENDER (Socket.IO)
     if (_socket != null && _socket!.connected) {
       final encoded = base64.encode(data);
       final message = {
         'device_type': deviceTypeStr,
         'device_id': widget.device.platformName,
+        'device_name': widget.device.platformName,  // ✅ AGGIUNTO
         'data': encoded,
         'latitude': currentPosition?.latitude,
         'longitude': currentPosition?.longitude,
+        'user_id': activeUserId,
+        'user_name': activeUserName,
       };
       _socket?.emit('heart_rate_data', message);
     }
     
-    // ✅ INVIA A SERVER SSH (TCP) - NUOVO
+    // INVIA A SERVER SSH (TCP)
     if (_tcpSender != null && _tcpSender!.isConnected && hrValue > 0) {
       final hrData = {
         'device_type': deviceTypeStr,
+        'device_name': widget.device.platformName,  // ✅ AGGIUNTO
         'heart_rate': hrValue,
         'latitude': currentPosition?.latitude,
         'longitude': currentPosition?.longitude,
+        'user_id': activeUserId,
+        'user_name': activeUserName,
       };
       
       _tcpSender!.sendData(
@@ -565,6 +612,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       );
     }
   }
+
 
   // Ferma streaming dati
   Future<void> _stopStreaming() async {
@@ -616,33 +664,38 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
       appBar: AppBar(
         backgroundColor: const Color.fromARGB(255, 0, 0, 0),
         elevation: 0,
-        title: Text(
-          widget.device.platformName.isEmpty ? 'Dispositivo' : widget.device.platformName,
-          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: signalColor.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: signalColor, width: 2),
-              ),
-              child: Row(
-                children: [
-                  Icon(signalIcon, color: signalColor, size: 18),
-                  const SizedBox(width: 6),
-                  Text('${signalStrength} dBm',
-                      style: TextStyle(color: signalColor, fontSize: 11, fontWeight: FontWeight.bold)),
-                ],
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.device.platformName.isEmpty ? 'Dispositivo' : widget.device.platformName,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ),
-        ],
+            if (activeUserName != null)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.person, color: deviceColor, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    activeUserName!,
+                    style: TextStyle(
+                      color: deviceColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        centerTitle: true,
       ),
+
       body: Stack(
         children: [
           Column(
@@ -664,7 +717,6 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       child: AppleMap(
                         onMapCreated: (controller) {
                           mapController = controller;
-
                           if (currentPosition != null) {
                             controller.animateCamera(
                               CameraUpdate.newCameraPosition(
@@ -686,6 +738,37 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                       ),
                     ),
                   ),
+                  
+                  // ✅ SEGNALE GPS IN ALTO A SINISTRA NELLA MAPPA
+                  Positioned(
+                    top: 30,
+                    left: 30,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: signalColor, width: 2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(signalIcon, color: signalColor, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${signalStrength} dBm',
+                            style: TextStyle(
+                              color: signalColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  // ✅ BOTTONE GPS IN ALTO A DESTRA (come prima)
                   Positioned(
                     top: 30,
                     right: 30,
@@ -704,6 +787,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen>
                   ),
                 ],
               ),
+
 
               // Bottone espandi/comprimi mappa
               InkWell(
