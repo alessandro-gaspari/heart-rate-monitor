@@ -1,22 +1,25 @@
 console.log('📊 Dashboard script caricato');
 
+// --- Variabili Globali ---
 let chart;
 let socket;
 let map;
 let marker;
 
-// Posizione di default (Milano)
+// Posizione iniziale di default (Milano Duomo)
 let lastKnownPosition = [45.4642, 9.19];
 
-// Statistiche locali incrementali
+// Oggetto per il calcolo incrementale delle statistiche
 let localStats = {
     sum: 0,
     count: 0,
-    min: Number.POSITIVE_INFINITY,
+    min: Infinity,
     max: 0
 };
 
-// ======================= GRAFICO (Chart.js) =======================
+// ============================================================
+// 1. GESTIONE GRAFICO (Chart.js + Zoom Plugin)
+// ============================================================
 
 function initChart() {
     const canvas = document.getElementById('heartRateChart');
@@ -26,6 +29,8 @@ function initChart() {
     }
 
     const ctx = canvas.getContext('2d');
+
+    // Gradiente per l'area sotto la linea
     const gradient = ctx.createLinearGradient(0, 0, 0, 400);
     gradient.addColorStop(0, 'rgba(255, 215, 0, 0.4)');
     gradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.2)');
@@ -40,29 +45,22 @@ function initChart() {
                 data: [],
                 borderColor: '#FFD700',
                 backgroundColor: gradient,
-                borderWidth: 3,
+                borderWidth: 2,
                 tension: 0.4,
                 fill: true,
                 pointRadius: 0,
-                pointHoverRadius: 8,
+                pointHoverRadius: 6,
                 pointBackgroundColor: '#FFD700',
-                pointBorderColor: '#000',
-                pointBorderWidth: 3,
-                pointHoverBackgroundColor: '#FFD700',
-                pointHoverBorderColor: '#FFF',
-                pointHoverBorderWidth: 4
+                pointBorderColor: '#000'
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false,
             interaction: {
                 intersect: false,
                 mode: 'index'
-            },
-            animation: {
-                duration: 300,
-                easing: 'easeOutQuad'
             },
             scales: {
                 x: {
@@ -75,7 +73,8 @@ function initChart() {
                         color: '#cccccc',
                         font: { family: 'Inter', size: 11 },
                         maxRotation: 0,
-                        autoSkipPadding: 20
+                        autoSkip: true,
+                        maxTicksLimit: 8
                     }
                 },
                 y: {
@@ -88,9 +87,8 @@ function initChart() {
                     },
                     ticks: {
                         color: '#cccccc',
-                        font: { family: 'Inter', size: 12 },
-                        callback: v => v + ' bpm',
-                        stepSize: 20
+                        stepSize: 20,
+                        callback: (val) => val + ' bpm'
                     }
                 }
             },
@@ -101,115 +99,100 @@ function initChart() {
                     titleColor: '#FFD700',
                     bodyColor: '#fff',
                     borderColor: '#FFD700',
-                    borderWidth: 2,
-                    padding: 14,
+                    borderWidth: 1,
                     displayColors: false,
-                    titleFont: { family: 'Inter', size: 13, weight: '600' },
-                    bodyFont: { family: 'Orbitron', size: 18, weight: '700' },
                     callbacks: {
-                        label: ctx => ctx.parsed.y + ' BPM'
+                        label: (context) => context.parsed.y + ' BPM'
+                    }
+                },
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x'
+                    },
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        mode: 'x'
+                    },
+                    limits: {
+                        y: { min: 30, max: 250 }
                     }
                 }
             }
         }
     });
 
-    console.log('✅ Grafico inizializzato');
+    console.log('✅ Grafico inizializzato con Zoom attivo');
 }
 
 function addDataToChart(bpm, timestamp) {
     if (!chart) return;
 
-    const t = timestamp ? new Date(timestamp) : new Date();
-    const timeLabel = t.toLocaleTimeString('it-IT', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+    const date = timestamp ? new Date(timestamp) : new Date();
+    const timeLabel = date.toLocaleTimeString('it-IT', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
     });
 
     chart.data.labels.push(timeLabel);
     chart.data.datasets[0].data.push(bpm);
 
-    const MAX_POINTS = 50;
-    if (chart.data.labels.length > MAX_POINTS) {
-        chart.data.labels.shift();
-        chart.data.datasets[0].data.shift();
-    }
-
     chart.update('none');
 }
 
-// ======================= STATISTICHE LOCALI =======================
+// ============================================================
+// 2. GESTIONE STATISTICHE (Locali e Veloci)
+// ============================================================
 
 function updateLocalStats(bpm) {
     if (!Number.isFinite(bpm) || bpm <= 0) return;
 
-    localStats.count += 1;
+    localStats.count++;
     localStats.sum += bpm;
+
     if (bpm < localStats.min) localStats.min = bpm;
     if (bpm > localStats.max) localStats.max = bpm;
 
     const avg = Math.round(localStats.sum / localStats.count);
 
-    const avgEl = document.getElementById('avgBpm');
-    const minEl = document.getElementById('minBpm');
-    const maxEl = document.getElementById('maxBpm');
-    const totEl = document.getElementById('totalSamples');
+    const elAvg = document.getElementById('avgBpm');
+    const elMin = document.getElementById('minBpm');
+    const elMax = document.getElementById('maxBpm');
+    const elTot = document.getElementById('totalSamples');
 
-    if (avgEl) avgEl.textContent = avg;
-    if (minEl) minEl.textContent = localStats.min;
-    if (maxEl) maxEl.textContent = localStats.max;
-    if (totEl) totEl.textContent = localStats.count;
+    if (elAvg) elAvg.textContent = avg;
+    if (elMin) elMin.textContent = localStats.min;
+    if (elMax) elMax.textContent = localStats.max;
+    if (elTot) elTot.textContent = localStats.count;
 }
 
-// Usa le stats dal backend come stato iniziale
 function loadInitialStats() {
     fetch('/api/stats')
-        .then(r => r.json())
+        .then(res => res.json())
         .then(data => {
-            const total = data.total_samples || 0;
-            if (total <= 0) return;
+            if (!data.total_samples || data.total_samples === 0) return;
 
-            localStats.count = total;
-            localStats.min = data.min_bpm || 0;
-            localStats.max = data.max_bpm || 0;
-            localStats.sum = (data.avg_bpm || 0) * total;
+            localStats.count = data.total_samples;
+            localStats.min = data.min_bpm;
+            localStats.max = data.max_bpm;
+            localStats.sum = data.avg_bpm * data.total_samples;
 
-            const avgEl = document.getElementById('avgBpm');
-            const minEl = document.getElementById('minBpm');
-            const maxEl = document.getElementById('maxBpm');
-            const totEl = document.getElementById('totalSamples');
+            updateLocalStats(0);
 
-            if (avgEl) avgEl.textContent = data.avg_bpm || 0;
-            if (minEl) minEl.textContent = data.min_bpm || 0;
-            if (maxEl) maxEl.textContent = data.max_bpm || 0;
-            if (totEl) totEl.textContent = total;
+            document.getElementById('avgBpm').textContent = data.avg_bpm;
+            document.getElementById('minBpm').textContent = data.min_bpm;
+            document.getElementById('maxBpm').textContent = data.max_bpm;
         })
-        .catch(err => console.error('❌ Errore stats iniziali:', err));
+        .catch(err => console.error('Statistiche non disponibili:', err));
 }
 
-// ======================= STORICO INIZIALE =======================
-
-function loadHistoricalData() {
-    fetch('/api/recent')
-        .then(r => r.json())
-        .then(items => {
-            if (!chart || !Array.isArray(items)) return;
-            items.forEach(item => {
-                if (!item.heart_rate) return;
-                addDataToChart(item.heart_rate, item.timestamp);
-                updateLocalStats(item.heart_rate);
-            });
-            chart.update();
-        })
-        .catch(err => console.error('❌ Errore dati storici:', err));
-}
-
-// ======================= MAPPA (Leaflet) =======================
+// ============================================================
+// 3. GESTIONE MAPPA (Leaflet)
+// ============================================================
 
 function initMap() {
-    const mapEl = document.getElementById('map');
-    if (!mapEl) {
+    const mapElement = document.getElementById('map');
+    if (!mapElement) {
         console.error('❌ Elemento #map non trovato');
         return;
     }
@@ -219,7 +202,7 @@ function initMap() {
     L.control.zoom({ position: 'topright' }).addTo(map);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap',
+        attribution: '&copy; OpenStreetMap, &copy; CartoDB',
         maxZoom: 19
     }).addTo(map);
 
@@ -232,50 +215,41 @@ function initMap() {
 
     marker = L.marker(lastKnownPosition, { icon: pulseIcon }).addTo(map);
 
-    // Pulsante per centrare
     const centerBtn = L.control({ position: 'bottomright' });
     centerBtn.onAdd = function () {
-        const div = L.DomUtil.create('div', '');
-        div.style.cssText = 'margin-bottom:20px;margin-right:20px;background:transparent;border:none;box-shadow:none;';
+        const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
         div.innerHTML = `
-            <button title="Centra su GPS" style="
+            <button title="Centra" style="
                 background: linear-gradient(135deg, #FFD700, #FFA500);
-                color: #000; border: none; width: 70px; height: 70px;
-                border-radius: 50%; cursor: pointer;
-                box-shadow: 0 6px 25px rgba(255, 215, 0, 0.7);
-                display: flex; align-items: center; justify-content: center;
-                transition: all 0.3s ease; font-weight: bold; font-size: 36px;">
+                border: none; width: 50px; height: 50px; border-radius: 50%;
+                cursor: pointer; font-size: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+                display:flex; align-items:center; justify-content:center;">
                 📍
-            </button>
-        `;
-        const btn = div.querySelector('button');
-        btn.onmouseover = () => btn.style.transform = 'scale(1.1)';
-        btn.onmouseout = () => btn.style.transform = 'scale(1)';
-        div.onclick = e => {
+            </button>`;
+        div.onclick = (e) => {
             e.stopPropagation();
-            map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
+            map.setView(lastKnownPosition, 16, { animate: true });
         };
         return div;
     };
     centerBtn.addTo(map);
 
-    // Stili marker GPS
     const style = document.createElement('style');
     style.textContent = `
         .gps-marker { position: relative; width: 60px; height: 60px; background: transparent !important; border: none !important; }
         .marker-pulse {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 50px; height: 50px; background: rgba(255, 215, 0, 0.4);
-            border-radius: 100%; animation: pulse 2s infinite;
+            width: 50px; height: 50px; background: rgba(255, 215, 0, 0.3);
+            border-radius: 100%; animation: gpsPulse 2s infinite;
         }
         .marker-dot {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 20px; height: 20px; background: #FFD700; border: 4px solid white;
-            border-radius: 100%; box-shadow: 0 0 20px rgba(255, 215, 0, 1); z-index: 1000;
+            width: 16px; height: 16px; background: #FFD700; border: 3px solid white;
+            border-radius: 100%; box-shadow: 0 0 15px #FFD700; z-index: 100;
         }
-        @keyframes pulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-            50% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+        @keyframes gpsPulse {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
         }
     `;
     document.head.appendChild(style);
@@ -293,65 +267,74 @@ function updateMapPosition(lat, lng) {
     if (gpsStatus) {
         gpsStatus.innerHTML = `
             <i data-lucide="satellite"></i>
-            <span>GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
+            <span>${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
         `;
         gpsStatus.classList.add('active');
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 }
 
-// ======================= SOCKET.IO =======================
+// ============================================================
+// 4. CONNESSIONE SOCKET.IO E DATI
+// ============================================================
 
 function initSocketIO() {
     socket = io({
         transports: ['websocket'],
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionAttempts: 10
+        reconnection: true
     });
 
     socket.on('connect', () => {
-        console.log('✅ Socket.IO connesso');
-        const dot = document.getElementById('connectionDot');
-        const text = document.getElementById('statusText');
-        if (dot) dot.classList.add('connected');
-        if (text) text.textContent = 'Connesso';
+        console.log('✅ Socket Connesso');
+        document.getElementById('connectionDot').classList.add('connected');
+        document.getElementById('statusText').textContent = 'Connesso';
     });
 
     socket.on('disconnect', () => {
-        console.log('⚠️ Socket.IO disconnesso');
-        const dot = document.getElementById('connectionDot');
-        const text = document.getElementById('statusText');
-        if (dot) dot.classList.remove('connected');
-        if (text) text.textContent = 'Disconnesso';
+        console.log('⚠️ Socket Disconnesso');
+        document.getElementById('connectionDot').classList.remove('connected');
+        document.getElementById('statusText').textContent = 'Disconnesso';
     });
 
-    socket.on('new_heart_rate', data => {
+    socket.on('new_heart_rate', (data) => {
         const bpm = data.heart_rate;
-        if (!bpm) return;
 
-        const bpmEl = document.getElementById('currentBpm');
-        const updateEl = document.getElementById('lastUpdate');
-        if (bpmEl) bpmEl.textContent = bpm;
-        if (updateEl) updateEl.textContent = 'Aggiornato ora';
+        document.getElementById('currentBpm').textContent = bpm;
+        document.getElementById('lastUpdate').textContent = 'Aggiornato ora';
 
         addDataToChart(bpm, data.timestamp);
+
         updateLocalStats(bpm);
 
         if (data.latitude && data.longitude) {
             updateMapPosition(data.latitude, data.longitude);
         }
     });
-
-    socket.on('connect_error', err => {
-        console.error('❌ Errore Socket.IO:', err);
-    });
 }
 
-// ======================= BOOTSTRAP PAGINA =======================
+function loadHistoricalData() {
+    fetch('/api/recent')
+        .then(res => res.json())
+        .then(data => {
+            if (!Array.isArray(data)) return;
+
+            data.forEach(item => {
+                if (item.heart_rate > 0) {
+                    addDataToChart(item.heart_rate, item.timestamp);
+                }
+            });
+
+            if (chart) chart.resetZoom();
+        })
+        .catch(err => console.error('Errore storico:', err));
+}
+
+// ============================================================
+// 5. INIZIALIZZAZIONE
+// ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Inizializzazione dashboard Coospo...');
+    console.log('🚀 Avvio Dashboard...');
 
     setTimeout(() => {
         initChart();
@@ -363,7 +346,5 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof lucide !== 'undefined') {
             lucide.createIcons();
         }
-
-        console.log('✔ Dashboard pronta');
     }, 100);
 });
