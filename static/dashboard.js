@@ -2,20 +2,31 @@ console.log('📊 Dashboard script caricato');
 
 let chart;
 let socket;
-let currentBpm = 0;
 let map;
 let marker;
+
+// Posizione di default (Milano)
 let lastKnownPosition = [45.4642, 9.19];
 
-// Inizializza grafico
+// Statistiche locali incrementali
+let localStats = {
+    sum: 0,
+    count: 0,
+    min: Number.POSITIVE_INFINITY,
+    max: 0
+};
+
+// ======================= GRAFICO (Chart.js) =======================
+
 function initChart() {
-    const ctx = document.getElementById('heartRateChart');
-    if (!ctx) {
-        console.error('❌ Canvas non trovato');
+    const canvas = document.getElementById('heartRateChart');
+    if (!canvas) {
+        console.error('❌ Canvas #heartRateChart non trovato');
         return;
     }
 
-    const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
     gradient.addColorStop(0, 'rgba(255, 215, 0, 0.4)');
     gradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.2)');
     gradient.addColorStop(1, 'rgba(255, 165, 0, 0)');
@@ -50,8 +61,8 @@ function initChart() {
                 mode: 'index'
             },
             animation: {
-                duration: 750,
-                easing: 'easeInOutQuart'
+                duration: 300,
+                easing: 'easeOutQuad'
             },
             scales: {
                 x: {
@@ -78,7 +89,7 @@ function initChart() {
                     ticks: {
                         color: '#cccccc',
                         font: { family: 'Inter', size: 12 },
-                        callback: val => val + ' bpm',
+                        callback: v => v + ' bpm',
                         stepSize: 20
                     }
                 }
@@ -106,41 +117,107 @@ function initChart() {
     console.log('✅ Grafico inizializzato');
 }
 
-// Aggiorna posizione sulla mappa
-function updateMapPosition(lat, lng) {
-    if (!map || !marker) {
-        console.warn('⚠️ Mappa o marker non inizializzati');
-        return;
+function addDataToChart(bpm, timestamp) {
+    if (!chart) return;
+
+    const t = timestamp ? new Date(timestamp) : new Date();
+    const timeLabel = t.toLocaleTimeString('it-IT', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+
+    chart.data.labels.push(timeLabel);
+    chart.data.datasets[0].data.push(bpm);
+
+    const MAX_POINTS = 50;
+    if (chart.data.labels.length > MAX_POINTS) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
     }
-    
-    console.log('📍 Aggiornamento posizione GPS:', lat, lng);
-    lastKnownPosition = [lat, lng];
-    marker.setLatLng(lastKnownPosition);
-    
-    const gpsStatus = document.getElementById('gpsStatus');
-    if (gpsStatus) {
-        gpsStatus.innerHTML = `
-            <i data-lucide="satellite"></i>
-            <span>GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
-        `;
-        gpsStatus.classList.add('active');
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
+
+    chart.update('none');
 }
 
-// Inizializza mappa Leaflet
+// ======================= STATISTICHE LOCALI =======================
+
+function updateLocalStats(bpm) {
+    if (!Number.isFinite(bpm) || bpm <= 0) return;
+
+    localStats.count += 1;
+    localStats.sum += bpm;
+    if (bpm < localStats.min) localStats.min = bpm;
+    if (bpm > localStats.max) localStats.max = bpm;
+
+    const avg = Math.round(localStats.sum / localStats.count);
+
+    const avgEl = document.getElementById('avgBpm');
+    const minEl = document.getElementById('minBpm');
+    const maxEl = document.getElementById('maxBpm');
+    const totEl = document.getElementById('totalSamples');
+
+    if (avgEl) avgEl.textContent = avg;
+    if (minEl) minEl.textContent = localStats.min;
+    if (maxEl) maxEl.textContent = localStats.max;
+    if (totEl) totEl.textContent = localStats.count;
+}
+
+// Usa le stats dal backend come stato iniziale
+function loadInitialStats() {
+    fetch('/api/stats')
+        .then(r => r.json())
+        .then(data => {
+            const total = data.total_samples || 0;
+            if (total <= 0) return;
+
+            localStats.count = total;
+            localStats.min = data.min_bpm || 0;
+            localStats.max = data.max_bpm || 0;
+            localStats.sum = (data.avg_bpm || 0) * total;
+
+            const avgEl = document.getElementById('avgBpm');
+            const minEl = document.getElementById('minBpm');
+            const maxEl = document.getElementById('maxBpm');
+            const totEl = document.getElementById('totalSamples');
+
+            if (avgEl) avgEl.textContent = data.avg_bpm || 0;
+            if (minEl) minEl.textContent = data.min_bpm || 0;
+            if (maxEl) maxEl.textContent = data.max_bpm || 0;
+            if (totEl) totEl.textContent = total;
+        })
+        .catch(err => console.error('❌ Errore stats iniziali:', err));
+}
+
+// ======================= STORICO INIZIALE =======================
+
+function loadHistoricalData() {
+    fetch('/api/recent')
+        .then(r => r.json())
+        .then(items => {
+            if (!chart || !Array.isArray(items)) return;
+            items.forEach(item => {
+                if (!item.heart_rate) return;
+                addDataToChart(item.heart_rate, item.timestamp);
+                updateLocalStats(item.heart_rate);
+            });
+            chart.update();
+        })
+        .catch(err => console.error('❌ Errore dati storici:', err));
+}
+
+// ======================= MAPPA (Leaflet) =======================
+
 function initMap() {
-    const mapElement = document.getElementById('map');
-    if (!mapElement) {
-        console.error('❌ Elemento #map non trovato nel DOM');
+    const mapEl = document.getElementById('map');
+    if (!mapEl) {
+        console.error('❌ Elemento #map non trovato');
         return;
     }
 
-    map = L.map('map', { zoomControl: false }).setView([45.4642, 9.19], 13);
-    
+    map = L.map('map', { zoomControl: false }).setView(lastKnownPosition, 13);
+
     L.control.zoom({ position: 'topright' }).addTo(map);
-    
-    // Tema voyager dark per mappa scura
+
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19
@@ -152,13 +229,14 @@ function initMap() {
         iconSize: [60, 60],
         iconAnchor: [30, 30]
     });
-    
+
     marker = L.marker(lastKnownPosition, { icon: pulseIcon }).addTo(map);
 
+    // Pulsante per centrare
     const centerBtn = L.control({ position: 'bottomright' });
-    centerBtn.onAdd = function() {
+    centerBtn.onAdd = function () {
         const div = L.DomUtil.create('div', '');
-        div.style.cssText = 'margin-bottom: 20px; margin-right: 20px; background: transparent; border: none; box-shadow: none;';
+        div.style.cssText = 'margin-bottom:20px;margin-right:20px;background:transparent;border:none;box-shadow:none;';
         div.innerHTML = `
             <button title="Centra su GPS" style="
                 background: linear-gradient(135deg, #FFD700, #FFA500);
@@ -173,7 +251,7 @@ function initMap() {
         const btn = div.querySelector('button');
         btn.onmouseover = () => btn.style.transform = 'scale(1.1)';
         btn.onmouseout = () => btn.style.transform = 'scale(1)';
-        div.onclick = (e) => {
+        div.onclick = e => {
             e.stopPropagation();
             map.setView(lastKnownPosition, 16, { animate: true, duration: 1 });
         };
@@ -181,7 +259,7 @@ function initMap() {
     };
     centerBtn.addTo(map);
 
-    // Stili per marker GPS
+    // Stili marker GPS
     const style = document.createElement('style');
     style.textContent = `
         .gps-marker { position: relative; width: 60px; height: 60px; background: transparent !important; border: none !important; }
@@ -201,55 +279,29 @@ function initMap() {
         }
     `;
     document.head.appendChild(style);
-    
+
     console.log('✅ Mappa inizializzata');
 }
 
-// Aggiunge dato al grafico
-function addDataToChart(value) {
-    if (!chart) return;
-    const now = new Date();
-    const timeLabel = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    chart.data.labels.push(timeLabel);
-    chart.data.datasets[0].data.push(value);
-    if (chart.data.labels.length > 50) {
-        chart.data.labels.shift();
-        chart.data.datasets[0].data.shift();
+function updateMapPosition(lat, lng) {
+    if (!map || !marker) return;
+
+    lastKnownPosition = [lat, lng];
+    marker.setLatLng(lastKnownPosition);
+
+    const gpsStatus = document.getElementById('gpsStatus');
+    if (gpsStatus) {
+        gpsStatus.innerHTML = `
+            <i data-lucide="satellite"></i>
+            <span>GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}</span>
+        `;
+        gpsStatus.classList.add('active');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
-    chart.update('none');
 }
 
-// Carica statistiche da API
-function loadStats() {
-    fetch('/api/stats')
-        .then(res => res.json())
-        .then(data => {
-            document.getElementById('avgBpm').textContent = data.avg_bpm || '0';
-            document.getElementById('minBpm').textContent = data.min_bpm || '0';
-            document.getElementById('maxBpm').textContent = data.max_bpm || '0';
-            document.getElementById('totalSamples').textContent = data.total_samples || '0';
-        })
-        .catch(err => console.error('❌ Errore stats:', err));
-}
+// ======================= SOCKET.IO =======================
 
-// Carica dati storici da API
-function loadHistoricalData() {
-    fetch('/api/recent')
-        .then(res => res.json())
-        .then(data => {
-            if (!chart) return;
-            data.forEach(item => {
-                const timestamp = new Date(item.timestamp);
-                const timeLabel = timestamp.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                chart.data.labels.push(timeLabel);
-                chart.data.datasets[0].data.push(item.heart_rate);
-            });
-            chart.update();
-        })
-        .catch(err => console.error('❌ Errore dati storici:', err));
-}
-
-// Inizializza Socket.IO
 function initSocketIO() {
     socket = io({
         transports: ['websocket'],
@@ -258,7 +310,7 @@ function initSocketIO() {
         reconnectionAttempts: 10
     });
 
-    socket.on('connect', function() {
+    socket.on('connect', () => {
         console.log('✅ Socket.IO connesso');
         const dot = document.getElementById('connectionDot');
         const text = document.getElementById('statusText');
@@ -266,7 +318,7 @@ function initSocketIO() {
         if (text) text.textContent = 'Connesso';
     });
 
-    socket.on('disconnect', function() {
+    socket.on('disconnect', () => {
         console.log('⚠️ Socket.IO disconnesso');
         const dot = document.getElementById('connectionDot');
         const text = document.getElementById('statusText');
@@ -274,47 +326,44 @@ function initSocketIO() {
         if (text) text.textContent = 'Disconnesso';
     });
 
-    socket.on('new_heart_rate', function(data) {
-        console.log('📡 Dati ricevuti:', data);
-        
+    socket.on('new_heart_rate', data => {
         const bpm = data.heart_rate;
+        if (!bpm) return;
+
         const bpmEl = document.getElementById('currentBpm');
         const updateEl = document.getElementById('lastUpdate');
         if (bpmEl) bpmEl.textContent = bpm;
         if (updateEl) updateEl.textContent = 'Aggiornato ora';
-        
-        addDataToChart(bpm);
-        
+
+        addDataToChart(bpm, data.timestamp);
+        updateLocalStats(bpm);
+
         if (data.latitude && data.longitude) {
-            console.log('✅ GPS ricevuto:', data.latitude, data.longitude);
             updateMapPosition(data.latitude, data.longitude);
-        } else {
-            console.warn('⚠️ GPS non presente nei dati');
         }
-        
-        if (Math.random() < 0.1) loadStats(); // Ricarica statistiche ogni 10% ricezione dati
     });
 
-    socket.on('connect_error', function(error) {
-        console.error('❌ Errore Socket.IO:', error);
+    socket.on('connect_error', err => {
+        console.error('❌ Errore Socket.IO:', err);
     });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Inizializzazione dashboard...');
-    
+// ======================= BOOTSTRAP PAGINA =======================
+
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Inizializzazione dashboard Coospo...');
+
     setTimeout(() => {
-        initChart(); // Setup grafico
-        initMap(); // Setup mappa
-        initSocketIO(); // Setup socket
-        loadStats(); // Carica statistiche iniziali
-        loadHistoricalData(); // Carica dati storici
-        setInterval(loadStats, 30000); // Aggiorna statistiche ogni 30s
-        
+        initChart();
+        initMap();
+        initSocketIO();
+        loadInitialStats();
+        loadHistoricalData();
+
         if (typeof lucide !== 'undefined') {
-            lucide.createIcons(); // Inizializza icone lucide se presente
+            lucide.createIcons();
         }
-        
-        console.log('✅ Dashboard pronta');
+
+        console.log('✔ Dashboard pronta');
     }, 100);
 });
